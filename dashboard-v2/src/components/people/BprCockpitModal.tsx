@@ -7,6 +7,7 @@ import {
   BprCandidateResult, 
   BprCycle, 
   BprCamada, 
+  BprAdditionalDeductionSource,
   BprCalculationSummary,
   BprSavedScenario,
   BprSavedRun 
@@ -152,9 +153,41 @@ export function BprCockpitModal({
   // Validação da Soma de Splits ou Montante
   const isAmountMode = config.splitMode === 'amount';
   const totalSplitPercent = config.tierSplits.E + config.tierSplits.T + config.tierSplits.O;
-  const isSplitValid = isAmountMode 
-    ? (summary.totalPoolAmount > 0) 
-    : (totalSplitPercent === 100);
+  const totalAdditionalAmount = summary.totalAdditionalAmount || 0;
+  const manualPercentReductionAmount = totalSplitPercent < 100
+    ? ((100 - totalSplitPercent) / 100) * (config.totalPoolAmount || 0)
+    : 0;
+  const isSplitValid = isAmountMode
+    ? (summary.totalPoolAmount > 0)
+    : (
+        totalSplitPercent === 100 ||
+        (totalSplitPercent < 100 && totalAdditionalAmount > 0 && Math.abs(manualPercentReductionAmount - totalAdditionalAmount) <= 1.0)
+      );
+
+  // Atualização de Valor Adicional por Colaborador
+  const handleAdditionalAmountChange = (employeeId: string, rawVal: string) => {
+    const parsed = parseFloat(rawVal);
+    const sanitized = !isNaN(parsed) && parsed > 0 ? Number(parsed.toFixed(2)) : 0;
+    setConfig(prev => {
+      const nextMap = { ...(prev.additionalAmounts || {}) };
+      if (sanitized > 0) {
+        nextMap[employeeId] = sanitized;
+      } else {
+        delete nextMap[employeeId];
+      }
+      return {
+        ...prev,
+        additionalAmounts: nextMap
+      };
+    });
+  };
+
+  const handleClearAllAdditionalAmounts = () => {
+    setConfig(prev => ({
+      ...prev,
+      additionalAmounts: {}
+    }));
+  };
 
   // Atualização de Ciclo
   const handleCycleChange = (cycle: BprCycle) => {
@@ -221,8 +254,18 @@ export function BprCockpitModal({
       : 'Inativos desclassificados';
     const empresasDesc = config.companiesFilter.length > 0 ? `Empresas: ${config.companiesFilter.join(', ')}` : 'Todas as empresas';
     const vinculosDesc = config.linkTypesFilter.length > 0 ? `Vínculos: ${config.linkTypesFilter.join(', ')}` : 'Todos os regimes (CLT, PJ, etc.)';
+    const sourceLabelMap: Record<string, string> = {
+      total_pool: 'Total Rateado',
+      own_layer: 'Própria Camada',
+      E: 'Camada Estratégico (E)',
+      T: 'Camada Tático (T)',
+      O: 'Camada Operacional (O)',
+    };
+    const addDesc = (summary.totalAdditionalAmount || 0) > 0
+      ? ` | Adicionais Individuais: R$ ${(summary.totalAdditionalAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (Abatido de: ${sourceLabelMap[config.additionalDeductionSource || 'total_pool']})`
+      : '';
 
-    return `Ciclo ${cycleLabel} ${config.year} | Montante R$ ${summary.totalPoolAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ${splitDesc} | ${glosaDesc} | ${inativoDesc} | ${empresasDesc} | ${vinculosDesc}`;
+    return `Ciclo ${cycleLabel} ${config.year} | Montante R$ ${summary.totalPoolAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ${splitDesc}${addDesc} | ${glosaDesc} | ${inativoDesc} | ${empresasDesc} | ${vinculosDesc}`;
   };
 
   // Abrir Modal de Salvar Cenário
@@ -250,6 +293,8 @@ export function BprCockpitModal({
       config: JSON.parse(JSON.stringify(config)),
       summary: {
         totalPoolAmount: summary.totalPoolAmount,
+        totalAdditionalAmount: summary.totalAdditionalAmount,
+        netPoolForLayers: summary.netPoolForLayers,
         totalDistributedAmount: summary.totalDistributedAmount,
         residualAmount: summary.residualAmount,
         totalCandidates: summary.totalCandidates,
@@ -878,7 +923,11 @@ export function BprCockpitModal({
                 }`}>
                   {config.splitMode === 'amount' 
                     ? `Total: ${formatCurrency(summary.totalPoolAmount)}`
-                    : `Soma: ${totalSplitPercent}% ${isSplitValid ? '✓' : `(Ajuste ${100 - totalSplitPercent > 0 ? `+${100 - totalSplitPercent}%` : `${100 - totalSplitPercent}%`})`}`
+                    : `Soma: ${totalSplitPercent}% ${
+                        isSplitValid
+                          ? (totalSplitPercent < 100 ? '(Abate Adic.) ✓' : '✓')
+                          : `(Ajuste ${100 - totalSplitPercent > 0 ? `+${100 - totalSplitPercent}%` : `${100 - totalSplitPercent}%`})`
+                      }`
                   }
                 </span>
               </div>
@@ -1152,6 +1201,65 @@ export function BprCockpitModal({
                   )}
                 </div>
               </div>
+
+              {/* Bloco: Abatimento de Valores Adicionais Individuais */}
+              <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-800">
+                    Abatimento de Valores Adicionais
+                  </span>
+                  {totalAdditionalAmount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllAdditionalAmounts}
+                      className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                    >
+                      Limpar Adicionais
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    Descontar Adicionais de:
+                  </label>
+                  <select
+                    value={config.additionalDeductionSource || 'total_pool'}
+                    onChange={e => setConfig(prev => ({
+                      ...prev,
+                      additionalDeductionSource: e.target.value as BprAdditionalDeductionSource
+                    }))}
+                    className="w-full min-h-[40px] bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500"
+                  >
+                    <option value="total_pool">Total Rateado (Padrão — Desconta do Bolo Geral)</option>
+                    <option value="own_layer">Própria Camada do Colaborador</option>
+                    <option value="E">Nível Estratégico (E)</option>
+                    <option value="T">Nível Tático (T)</option>
+                    <option value="O">Nível Operacional / CLTs (O)</option>
+                  </select>
+                </div>
+
+                {totalAdditionalAmount > 0 ? (
+                  <div className="bg-white border border-amber-200/80 rounded-lg p-2.5 space-y-1 text-xs font-mono">
+                    <div className="flex justify-between text-slate-600">
+                      <span className="font-sans font-semibold">Montante Total:</span>
+                      <span className="font-bold">{formatCurrency(summary.totalPoolAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-amber-700">
+                      <span className="font-sans font-semibold">(-) Adicionais Individuais:</span>
+                      <span className="font-bold">- {formatCurrency(totalAdditionalAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-700 pt-1 border-t border-slate-100 font-black">
+                      <span className="font-sans">(=) Líquido Rateado nos Níveis:</span>
+                      <span>{formatCurrency(summary.netPoolForLayers ?? summary.totalPoolAmount)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500">
+                    Insira valores na coluna <strong>+ Adicional (R$)</strong> da grade abaixo. Caso não reduza de uma camada específica, será descontado do total rateado.
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Lado Direito: Cards de Rateio por Camada & Toggles de Exceção */}
@@ -1167,6 +1275,11 @@ export function BprCockpitModal({
                   </div>
                   <div>
                     <div className="text-xl font-black text-slate-900 font-mono">{formatCurrency(summary.layers.E.totalLayerAmount)}</div>
+                    {(summary.layers.E.additionalDeductedFromLayer || 0) > 0 && (
+                      <div className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 rounded-md px-1.5 py-0.5 mt-1 font-mono">
+                        Bruto: {formatCurrency(summary.layers.E.grossLayerAmount || 0)} · (-) Adic.: -{formatCurrency(summary.layers.E.additionalDeductedFromLayer || 0)}
+                      </div>
+                    )}
                     <div className="text-xs text-slate-500 font-bold mt-0.5">
                       {summary.layers.E.eligibleCount} elegíveis ({summary.layers.E.ineligibleCount} fora)
                     </div>
@@ -1187,6 +1300,11 @@ export function BprCockpitModal({
                   </div>
                   <div>
                     <div className="text-xl font-black text-slate-900 font-mono">{formatCurrency(summary.layers.T.totalLayerAmount)}</div>
+                    {(summary.layers.T.additionalDeductedFromLayer || 0) > 0 && (
+                      <div className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 rounded-md px-1.5 py-0.5 mt-1 font-mono">
+                        Bruto: {formatCurrency(summary.layers.T.grossLayerAmount || 0)} · (-) Adic.: -{formatCurrency(summary.layers.T.additionalDeductedFromLayer || 0)}
+                      </div>
+                    )}
                     <div className="text-xs text-slate-500 font-bold mt-0.5">
                       {summary.layers.T.eligibleCount} elegíveis ({summary.layers.T.ineligibleCount} fora)
                     </div>
@@ -1207,6 +1325,11 @@ export function BprCockpitModal({
                   </div>
                   <div>
                     <div className="text-xl font-black text-slate-900 font-mono">{formatCurrency(summary.layers.O.totalLayerAmount)}</div>
+                    {(summary.layers.O.additionalDeductedFromLayer || 0) > 0 && (
+                      <div className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 rounded-md px-1.5 py-0.5 mt-1 font-mono">
+                        Bruto: {formatCurrency(summary.layers.O.grossLayerAmount || 0)} · (-) Adic.: -{formatCurrency(summary.layers.O.additionalDeductedFromLayer || 0)}
+                      </div>
+                    )}
                     <div className="text-xs text-slate-500 font-bold mt-0.5">
                       {summary.layers.O.eligibleCount} elegíveis ({summary.layers.O.ineligibleCount} fora)
                     </div>
@@ -1428,14 +1551,16 @@ export function BprCockpitModal({
                   <th className="py-3.5 px-4">Início Contrato ➔ Desligamento</th>
                   <th className="py-3.5 px-4 text-center">Entregáveis / Desempenho</th>
                   <th className="py-3.5 px-4 text-center">Status Elegibilidade</th>
-                  <th className="py-3.5 px-5 text-right">Valor BPR (R$)</th>
+                  <th className="py-3.5 px-4 text-right">Rateio Nível (R$)</th>
+                  <th className="py-3.5 px-4 text-right">+ Adicional (R$)</th>
+                  <th className="py-3.5 px-5 text-right">Valor Total BPR (R$)</th>
                   <th className="py-3.5 px-4 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {displayedCandidates.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-400 font-bold text-base">
+                    <td colSpan={10} className="py-16 text-center text-slate-400 font-bold text-base">
                       Nenhum contratado encontrado com os filtros selecionados.
                     </td>
                   </tr>
@@ -1543,7 +1668,67 @@ export function BprCockpitModal({
                           )}
                         </td>
 
-                        {/* Valor BPR */}
+                        {/* Rateio Nível (R$) */}
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="space-y-0.5">
+                            <span className={`text-sm font-bold font-mono block ${
+                              c.isEligible ? 'text-slate-700' : 'text-slate-300'
+                            }`}>
+                              {c.isEligible ? formatCurrency(c.rateioAmount ?? c.allocatedAmount) : 'R$ 0,00'}
+                            </span>
+                            {c.isEligible && c.performanceFactor < 1.0 && (
+                              <span className="text-[11px] text-amber-600 block font-mono">
+                                Base: {formatCurrency(c.baseAmount)} (75%)
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* + Adicional (R$) */}
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="inline-flex items-center justify-end gap-1">
+                            <div className="relative">
+                              <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold ${
+                                !c.isEligible
+                                  ? 'text-slate-300'
+                                  : (config.additionalAmounts?.[c.employeeId] || 0) > 0
+                                    ? 'text-amber-700'
+                                    : 'text-slate-400'
+                              }`}>
+                                R$
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="100"
+                                disabled={!c.isEligible}
+                                aria-label={`Valor adicional BPR para ${displayName}`}
+                                placeholder="0,00"
+                                value={c.isEligible && (config.additionalAmounts?.[c.employeeId] || 0) > 0 ? config.additionalAmounts?.[c.employeeId] : ''}
+                                onChange={e => handleAdditionalAmountChange(c.employeeId, e.target.value)}
+                                className={`w-28 min-h-[38px] pl-7 pr-2 py-1 text-right text-xs font-black font-mono rounded-lg border outline-none transition-all ${
+                                  !c.isEligible
+                                    ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                                    : (config.additionalAmounts?.[c.employeeId] || 0) > 0
+                                      ? 'bg-amber-50 border-amber-300 text-amber-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15'
+                                      : 'bg-white border-slate-200 text-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15'
+                                }`}
+                              />
+                            </div>
+                            {c.isEligible && (config.additionalAmounts?.[c.employeeId] || 0) > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => handleAdditionalAmountChange(c.employeeId, '0')}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Zerar adicional deste colaborador"
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Valor Total BPR */}
                         <td className="py-3.5 px-5 text-right">
                           <div className="space-y-0.5">
                             <span className={`text-base font-black font-mono block ${
@@ -1551,9 +1736,9 @@ export function BprCockpitModal({
                             }`}>
                               {c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00'}
                             </span>
-                            {c.isEligible && c.performanceFactor < 1.0 && (
-                              <span className="text-xs text-amber-600 block font-mono">
-                                Base: {formatCurrency(c.baseAmount)} (75%)
+                            {c.isEligible && (c.additionalAmount || 0) > 0 && (
+                              <span className="inline-block text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-mono">
+                                + {formatCurrency(c.additionalAmount || 0)} Adic.
                               </span>
                             )}
                           </div>
@@ -1603,13 +1788,31 @@ export function BprCockpitModal({
 
         {/* ── FOOTER COM TOTAIS CONSOLIDADOS ── */}
         <footer className="px-6 sm:px-10 py-4 border-t border-slate-200 bg-white flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-[0_-1px_0_0_rgba(0,0,0,0.05)]">
-          <div className="flex items-center gap-8">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-8">
             <div>
               <span className="text-xs font-bold text-slate-400 uppercase block tracking-wider">Total Elegíveis:</span>
               <strong className="text-base font-black text-emerald-600">
                 {summary.totalEligible} contratados
               </strong>
             </div>
+
+            {totalAdditionalAmount > 0 && (
+              <>
+                <div>
+                  <span className="text-xs font-bold text-slate-400 uppercase block tracking-wider">Rateio Níveis:</span>
+                  <strong className="text-base font-black text-slate-700 font-mono">
+                    {formatCurrency(summary.netPoolForLayers || 0)}
+                  </strong>
+                </div>
+
+                <div>
+                  <span className="text-xs font-bold text-amber-600 uppercase block tracking-wider">+ Adicionais:</span>
+                  <strong className="text-base font-black text-amber-700 font-mono">
+                    {formatCurrency(totalAdditionalAmount)}
+                  </strong>
+                </div>
+              </>
+            )}
 
             <div>
               <span className="text-xs font-bold text-slate-400 uppercase block tracking-wider">Total Rateado:</span>

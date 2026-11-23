@@ -33,6 +33,8 @@ export class BprService {
         splitMode: 'percentage',
         tierSplits: { E: 30, T: 40, O: 30 },
         tierAmounts: { E: 30000, T: 40000, O: 30000 },
+        additionalAmounts: {},
+        additionalDeductionSource: 'total_pool',
         allowGlosados: false,
         selectedGlosadosExceptions: [],
         allowInativos: false,
@@ -53,6 +55,8 @@ export class BprService {
         splitMode: 'percentage',
         tierSplits: { E: 30, T: 40, O: 30 },
         tierAmounts: { E: 30000, T: 40000, O: 30000 },
+        additionalAmounts: {},
+        additionalDeductionSource: 'total_pool',
         allowGlosados: false,
         selectedGlosadosExceptions: [],
         allowInativos: false,
@@ -72,6 +76,8 @@ export class BprService {
         splitMode: 'percentage',
         tierSplits: { E: 30, T: 40, O: 30 },
         tierAmounts: { E: 30000, T: 40000, O: 30000 },
+        additionalAmounts: {},
+        additionalDeductionSource: 'total_pool',
         allowGlosados: false,
         selectedGlosadosExceptions: [],
         allowInativos: false,
@@ -407,96 +413,200 @@ export class BprService {
       }
     });
 
-    // 5. Contagem de Elegíveis por Camada
+    return this.computeLayersAndAdditionalDistribution(candidates, config, glosadosCandidates, inativosCandidates);
+  }
+
+  /**
+   * Motor puro de cálculo de rateio por camada, valores adicionais individuais e regra de abatimento
+   */
+  static computeLayersAndAdditionalDistribution(
+    candidates: BprCandidateResult[],
+    config: BprRuleConfig,
+    glosadosCandidatesArg?: BprCandidateResult[],
+    inativosCandidatesArg?: BprCandidateResult[]
+  ): BprCalculationSummary {
     const layerEligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
     const layerIneligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
+    const additionalByOwnLayer: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
+    const additionalMap = config.additionalAmounts || {};
+    let totalAdditionalAmount = 0;
 
     candidates.forEach(c => {
       if (c.isEligible) {
-        layerEligibleCounts[c.camada]++;
+        layerEligibleCounts[c.camada] = (layerEligibleCounts[c.camada] || 0) + 1;
+        const addVal = Math.max(0, Number((Number(additionalMap[c.employeeId] || 0)).toFixed(2)));
+        additionalByOwnLayer[c.camada] = Number((additionalByOwnLayer[c.camada] + addVal).toFixed(2));
+        totalAdditionalAmount = Number((totalAdditionalAmount + addVal).toFixed(2));
       } else {
-        layerIneligibleCounts[c.camada]++;
+        layerIneligibleCounts[c.camada] = (layerIneligibleCounts[c.camada] || 0) + 1;
       }
     });
 
-    // 6. Rateio Financeiro por Camada (Porcentagem ou Valor Fixo R$)
+    // Rateio Bruto por Camada (Porcentagem ou Valor Fixo R$)
     const isAmountMode = config.splitMode === 'amount' && !!config.tierAmounts;
-    const effectiveTotalPool = isAmountMode 
-      ? Number(((config.tierAmounts?.E || 0) + (config.tierAmounts?.T || 0) + (config.tierAmounts?.O || 0)).toFixed(2))
-      : config.totalPoolAmount;
+    const gross: Record<BprCamada, number> = isAmountMode
+      ? {
+          E: Math.max(0, Number(config.tierAmounts?.E || 0)),
+          T: Math.max(0, Number(config.tierAmounts?.T || 0)),
+          O: Math.max(0, Number(config.tierAmounts?.O || 0)),
+        }
+      : {
+          E: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.E || 0)) / 100),
+          T: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.T || 0)) / 100),
+          O: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.O || 0)) / 100),
+        };
 
-    const layerAmountE = isAmountMode ? (config.tierAmounts?.E || 0) : (config.totalPoolAmount * config.tierSplits.E) / 100;
-    const layerAmountT = isAmountMode ? (config.tierAmounts?.T || 0) : (config.totalPoolAmount * config.tierSplits.T) / 100;
-    const layerAmountO = isAmountMode ? (config.tierAmounts?.O || 0) : (config.totalPoolAmount * config.tierSplits.O) / 100;
+    const grossLayersSum = Number((gross.E + gross.T + gross.O).toFixed(2));
+    const effectiveTotalPool = isAmountMode
+      ? Math.max(grossLayersSum, Number((config.totalPoolAmount || 0).toFixed(2)))
+      : Math.max(0, Number((config.totalPoolAmount || 0).toFixed(2)));
 
-    const layerPctE = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountE / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.E;
-    const layerPctT = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountT / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.T;
-    const layerPctO = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountO / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.O;
+    // Quanto o usuário já reduziu manualmente nos níveis abaixo do montante total
+    const manualLayerReduction = Math.max(0, Number((effectiveTotalPool - grossLayersSum).toFixed(2)));
+    const remainingToDeduct = Math.max(0, Number((totalAdditionalAmount - manualLayerReduction).toFixed(2)));
+
+    // Regra de Abatimento (total_pool | own_layer | E | T | O)
+    const source = config.additionalDeductionSource || 'total_pool';
+    const deduct: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
+
+    if (remainingToDeduct > 0 && grossLayersSum > 0) {
+      if (source === 'E' || source === 'T' || source === 'O') {
+        const direct = Math.min(gross[source], remainingToDeduct);
+        deduct[source] = direct;
+        const overflow = remainingToDeduct - direct;
+        if (overflow > 0) {
+          const otherKeys: BprCamada[] = (['E', 'T', 'O'] as BprCamada[]).filter(k => k !== source);
+          const otherSum = otherKeys.reduce((acc, k) => acc + gross[k], 0);
+          if (otherSum > 0) {
+            otherKeys.forEach(k => {
+              deduct[k] = Math.min(gross[k], overflow * (gross[k] / otherSum));
+            });
+          }
+        }
+      } else if (source === 'own_layer') {
+        const scale = totalAdditionalAmount > 0 ? remainingToDeduct / totalAdditionalAmount : 0;
+        let overflow = 0;
+        (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
+          const wanted = additionalByOwnLayer[k] * scale;
+          const clamped = Math.min(gross[k], wanted);
+          deduct[k] = clamped;
+          overflow += wanted - clamped;
+        });
+        if (overflow > 0.005) {
+          const remainingCap = (['E', 'T', 'O'] as BprCamada[]).reduce(
+            (acc, k) => acc + Math.max(0, gross[k] - deduct[k]),
+            0
+          );
+          if (remainingCap > 0) {
+            (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
+              const cap = Math.max(0, gross[k] - deduct[k]);
+              deduct[k] += Math.min(cap, overflow * (cap / remainingCap));
+            });
+          }
+        }
+      } else {
+        // Padrão ('total_pool'): descontado proporcionalmente do total rateado entre os níveis
+        (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
+          deduct[k] = Math.min(gross[k], remainingToDeduct * (gross[k] / grossLayersSum));
+        });
+      }
+    }
+
+    const net: Record<BprCamada, number> = {
+      E: Math.max(0, Number((gross.E - deduct.E).toFixed(2))),
+      T: Math.max(0, Number((gross.T - deduct.T).toFixed(2))),
+      O: Math.max(0, Number((gross.O - deduct.O).toFixed(2))),
+    };
+
+    const layerPctE = isAmountMode ? (effectiveTotalPool > 0 ? Number(((gross.E / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.E;
+    const layerPctT = isAmountMode ? (effectiveTotalPool > 0 ? Number(((gross.T / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.T;
+    const layerPctO = isAmountMode ? (effectiveTotalPool > 0 ? Number(((gross.O / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.O;
 
     const layers: Record<BprCamada, BprLayerSummary> = {
       E: {
         camada: 'E',
         label: 'Estratégico',
         allocatedPercentage: layerPctE,
-        totalLayerAmount: Number(layerAmountE.toFixed(2)),
+        totalLayerAmount: net.E,
+        grossLayerAmount: Number(gross.E.toFixed(2)),
+        additionalDeductedFromLayer: Number((gross.E - net.E).toFixed(2)),
         eligibleCount: layerEligibleCounts.E,
         ineligibleCount: layerIneligibleCounts.E,
-        amountPerEligible: layerEligibleCounts.E > 0 
-          ? Number((layerAmountE / layerEligibleCounts.E).toFixed(2)) 
+        amountPerEligible: layerEligibleCounts.E > 0
+          ? Number((net.E / layerEligibleCounts.E).toFixed(2))
           : 0
       },
       T: {
         camada: 'T',
         label: 'Tático',
         allocatedPercentage: layerPctT,
-        totalLayerAmount: Number(layerAmountT.toFixed(2)),
+        totalLayerAmount: net.T,
+        grossLayerAmount: Number(gross.T.toFixed(2)),
+        additionalDeductedFromLayer: Number((gross.T - net.T).toFixed(2)),
         eligibleCount: layerEligibleCounts.T,
         ineligibleCount: layerIneligibleCounts.T,
-        amountPerEligible: layerEligibleCounts.T > 0 
-          ? Number((layerAmountT / layerEligibleCounts.T).toFixed(2)) 
+        amountPerEligible: layerEligibleCounts.T > 0
+          ? Number((net.T / layerEligibleCounts.T).toFixed(2))
           : 0
       },
       O: {
         camada: 'O',
         label: 'Operacional/CLTs',
         allocatedPercentage: layerPctO,
-        totalLayerAmount: Number(layerAmountO.toFixed(2)),
+        totalLayerAmount: net.O,
+        grossLayerAmount: Number(gross.O.toFixed(2)),
+        additionalDeductedFromLayer: Number((gross.O - net.O).toFixed(2)),
         eligibleCount: layerEligibleCounts.O,
         ineligibleCount: layerIneligibleCounts.O,
-        amountPerEligible: layerEligibleCounts.O > 0 
-          ? Number((layerAmountO / layerEligibleCounts.O).toFixed(2)) 
+        amountPerEligible: layerEligibleCounts.O > 0
+          ? Number((net.O / layerEligibleCounts.O).toFixed(2))
           : 0
       }
     };
 
-    // 7. Atribuição do Valor Individual a Cada Elegível (considerando o fator de metas)
+    // Atribuição Individual (rateio da camada * desempenho + valor adicional)
     let totalDistributed = 0;
-    candidates.forEach(c => {
+    const updatedCandidates: BprCandidateResult[] = candidates.map(c => {
       if (c.isEligible) {
-        const baseVal = layers[c.camada].amountPerEligible;
-        const finalVal = Number((baseVal * (c.performanceFactor ?? 1.0)).toFixed(2));
-        c.baseAmount = baseVal;
-        c.allocatedAmount = finalVal;
+        const baseVal = layers[c.camada]?.amountPerEligible || 0;
+        const rateioVal = Number((baseVal * (c.performanceFactor ?? 1.0)).toFixed(2));
+        const addVal = Math.max(0, Number((Number(additionalMap[c.employeeId] || 0)).toFixed(2)));
+        const finalVal = Number((rateioVal + addVal).toFixed(2));
         totalDistributed += finalVal;
-      } else {
-        c.baseAmount = 0;
-        c.allocatedAmount = 0;
+        return {
+          ...c,
+          baseAmount: baseVal,
+          rateioAmount: rateioVal,
+          additionalAmount: addVal,
+          allocatedAmount: finalVal
+        };
       }
+      return {
+        ...c,
+        baseAmount: 0,
+        rateioAmount: 0,
+        additionalAmount: 0,
+        allocatedAmount: 0
+      };
     });
 
-    const residualAmount = Math.max(0, effectiveTotalPool - totalDistributed);
+    const netPoolForLayers = Number((net.E + net.T + net.O).toFixed(2));
+    const totalDistributedRounded = Number(totalDistributed.toFixed(2));
+    const residualAmount = Math.max(0, Number((effectiveTotalPool - totalDistributedRounded).toFixed(2)));
 
     return {
       totalPoolAmount: effectiveTotalPool,
-      totalDistributedAmount: Number(totalDistributed.toFixed(2)),
-      residualAmount: Number(residualAmount.toFixed(2)),
-      totalCandidates: candidates.length,
+      totalAdditionalAmount,
+      netPoolForLayers,
+      totalDistributedAmount: totalDistributedRounded,
+      residualAmount,
+      totalCandidates: updatedCandidates.length,
       totalEligible: layerEligibleCounts.E + layerEligibleCounts.T + layerEligibleCounts.O,
       totalIneligible: layerIneligibleCounts.E + layerIneligibleCounts.T + layerIneligibleCounts.O,
       layers,
-      candidates,
-      glosadosCandidates,
-      inativosCandidates
+      candidates: updatedCandidates,
+      glosadosCandidates: glosadosCandidatesArg || updatedCandidates.filter(c => c.hasGlosaInPeriod),
+      inativosCandidates: inativosCandidatesArg || updatedCandidates.filter(c => c.isInactiveAtPaymentDate)
     };
   }
 
@@ -508,100 +618,7 @@ export class BprService {
     candidatesSnapshot: BprCandidateResult[],
     newConfig: BprRuleConfig
   ): BprCalculationSummary {
-    const layerEligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
-    const layerIneligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
-
-    candidatesSnapshot.forEach(c => {
-      if (c.isEligible) {
-        layerEligibleCounts[c.camada] = (layerEligibleCounts[c.camada] || 0) + 1;
-      } else {
-        layerIneligibleCounts[c.camada] = (layerIneligibleCounts[c.camada] || 0) + 1;
-      }
-    });
-
-    const isAmountMode = newConfig.splitMode === 'amount' && !!newConfig.tierAmounts;
-    const effectiveTotalPool = isAmountMode 
-      ? Number(((newConfig.tierAmounts?.E || 0) + (newConfig.tierAmounts?.T || 0) + (newConfig.tierAmounts?.O || 0)).toFixed(2))
-      : newConfig.totalPoolAmount;
-
-    const layerAmountE = isAmountMode ? (newConfig.tierAmounts?.E || 0) : (newConfig.totalPoolAmount * newConfig.tierSplits.E) / 100;
-    const layerAmountT = isAmountMode ? (newConfig.tierAmounts?.T || 0) : (newConfig.totalPoolAmount * newConfig.tierSplits.T) / 100;
-    const layerAmountO = isAmountMode ? (newConfig.tierAmounts?.O || 0) : (newConfig.totalPoolAmount * newConfig.tierSplits.O) / 100;
-
-    const layerPctE = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountE / effectiveTotalPool) * 100).toFixed(1)) : 0) : newConfig.tierSplits.E;
-    const layerPctT = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountT / effectiveTotalPool) * 100).toFixed(1)) : 0) : newConfig.tierSplits.T;
-    const layerPctO = isAmountMode ? (effectiveTotalPool > 0 ? Number(((layerAmountO / effectiveTotalPool) * 100).toFixed(1)) : 0) : newConfig.tierSplits.O;
-
-    const layers: Record<BprCamada, BprLayerSummary> = {
-      E: {
-        camada: 'E',
-        label: 'Estratégico',
-        allocatedPercentage: layerPctE,
-        totalLayerAmount: Number(layerAmountE.toFixed(2)),
-        eligibleCount: layerEligibleCounts.E,
-        ineligibleCount: layerIneligibleCounts.E,
-        amountPerEligible: layerEligibleCounts.E > 0 
-          ? Number((layerAmountE / layerEligibleCounts.E).toFixed(2)) 
-          : 0
-      },
-      T: {
-        camada: 'T',
-        label: 'Tático',
-        allocatedPercentage: layerPctT,
-        totalLayerAmount: Number(layerAmountT.toFixed(2)),
-        eligibleCount: layerEligibleCounts.T,
-        ineligibleCount: layerIneligibleCounts.T,
-        amountPerEligible: layerEligibleCounts.T > 0 
-          ? Number((layerAmountT / layerEligibleCounts.T).toFixed(2)) 
-          : 0
-      },
-      O: {
-        camada: 'O',
-        label: 'Operacional/CLTs',
-        allocatedPercentage: layerPctO,
-        totalLayerAmount: Number(layerAmountO.toFixed(2)),
-        eligibleCount: layerEligibleCounts.O,
-        ineligibleCount: layerIneligibleCounts.O,
-        amountPerEligible: layerEligibleCounts.O > 0 
-          ? Number((layerAmountO / layerEligibleCounts.O).toFixed(2)) 
-          : 0
-      }
-    };
-
-    let totalDistributed = 0;
-    const updatedCandidates: BprCandidateResult[] = candidatesSnapshot.map(c => {
-      if (c.isEligible) {
-        const baseVal = layers[c.camada]?.amountPerEligible || 0;
-        const finalVal = Number((baseVal * (c.performanceFactor ?? 1.0)).toFixed(2));
-        totalDistributed += finalVal;
-        return {
-          ...c,
-          baseAmount: baseVal,
-          allocatedAmount: finalVal
-        };
-      } else {
-        return {
-          ...c,
-          baseAmount: 0,
-          allocatedAmount: 0
-        };
-      }
-    });
-
-    const residualAmount = Math.max(0, effectiveTotalPool - totalDistributed);
-
-    return {
-      totalPoolAmount: effectiveTotalPool,
-      totalDistributedAmount: Number(totalDistributed.toFixed(2)),
-      residualAmount: Number(residualAmount.toFixed(2)),
-      totalCandidates: updatedCandidates.length,
-      totalEligible: layerEligibleCounts.E + layerEligibleCounts.T + layerEligibleCounts.O,
-      totalIneligible: layerIneligibleCounts.E + layerIneligibleCounts.T + layerIneligibleCounts.O,
-      layers,
-      candidates: updatedCandidates,
-      glosadosCandidates: updatedCandidates.filter(c => c.hasGlosaInPeriod),
-      inativosCandidates: updatedCandidates.filter(c => c.isInactiveAtPaymentDate)
-    };
+    return this.computeLayersAndAdditionalDistribution(candidatesSnapshot, newConfig);
   }
 
   /**
@@ -642,6 +659,8 @@ export class BprService {
       config: params.newConfig,
       summary: {
         totalPoolAmount: recalculated.totalPoolAmount,
+        totalAdditionalAmount: recalculated.totalAdditionalAmount,
+        netPoolForLayers: recalculated.netPoolForLayers,
         totalDistributedAmount: recalculated.totalDistributedAmount,
         residualAmount: recalculated.residualAmount,
         totalCandidates: recalculated.totalCandidates,

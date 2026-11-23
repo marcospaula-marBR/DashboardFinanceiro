@@ -99,7 +99,9 @@ export class BprPdfService {
     const studyDateFormatted = meta?.studyDate ? formatDatePtBr(meta.studyDate) : formatDatePtBr(new Date().toISOString().slice(0, 10));
 
     // Filtragem dos Colaboradores para o Relatório
-    const filteredCandidates = this.filterCandidates(summary.candidates, meta);
+    const filteredCandidates = this.filterCandidates(summary.candidates || [], meta);
+    const totalFilteredRateio = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.rateioAmount ?? c.allocatedAmount) : 0), 0);
+    const totalFilteredAdditional = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.additionalAmount || 0) : 0), 0);
     const totalFilteredDistributed = filteredCandidates.reduce((s, c) => s + (c.isEligible ? c.allocatedAmount : 0), 0);
     const totalFilteredEligible = filteredCandidates.filter(c => c.isEligible).length;
     const totalFilteredIneligible = filteredCandidates.filter(c => !c.isEligible).length;
@@ -227,6 +229,8 @@ export class BprPdfService {
         [
           'Estratégico (E)',
           `${summary.layers.E.allocatedPercentage}%`,
+          formatCurrency(summary.layers.E.grossLayerAmount ?? summary.layers.E.totalLayerAmount),
+          formatCurrency(summary.layers.E.additionalDeductedFromLayer || 0),
           formatCurrency(summary.layers.E.totalLayerAmount),
           `${summary.layers.E.eligibleCount} colaborador(es)`,
           formatCurrency(summary.layers.E.amountPerEligible)
@@ -234,6 +238,8 @@ export class BprPdfService {
         [
           'Tático (T)',
           `${summary.layers.T.allocatedPercentage}%`,
+          formatCurrency(summary.layers.T.grossLayerAmount ?? summary.layers.T.totalLayerAmount),
+          formatCurrency(summary.layers.T.additionalDeductedFromLayer || 0),
           formatCurrency(summary.layers.T.totalLayerAmount),
           `${summary.layers.T.eligibleCount} colaborador(es)`,
           formatCurrency(summary.layers.T.amountPerEligible)
@@ -241,6 +247,8 @@ export class BprPdfService {
         [
           'Operacional / CLTs (O)',
           `${summary.layers.O.allocatedPercentage}%`,
+          formatCurrency(summary.layers.O.grossLayerAmount ?? summary.layers.O.totalLayerAmount),
+          formatCurrency(summary.layers.O.additionalDeductedFromLayer || 0),
           formatCurrency(summary.layers.O.totalLayerAmount),
           `${summary.layers.O.eligibleCount} colaborador(es)`,
           formatCurrency(summary.layers.O.amountPerEligible)
@@ -249,7 +257,7 @@ export class BprPdfService {
 
       autoTable(doc, {
         startY: nextY,
-        head: [['Camada / Perfil', 'Rateio (%)', 'Montante Alocado', 'Elegíveis Globais', 'Valor Base / Pessoa']],
+        head: [['Camada / Perfil', 'Rateio (%)', 'Montante Bruto', '(-) Adic. Abatido', 'Montante Líquido', 'Elegíveis Globais', 'Valor Base / Pessoa']],
         body: layerRows,
         theme: 'grid',
         headStyles: {
@@ -280,6 +288,8 @@ export class BprPdfService {
       c.monthlyAverageScore !== undefined ? `${c.monthlyAverageScore}%` : '100%',
       c.performanceFactorLabel || '100%',
       c.isEligible ? 'Elegível' : 'Inelegível',
+      c.isEligible ? formatCurrency(c.rateioAmount ?? c.allocatedAmount) : 'R$ 0,00',
+      c.isEligible ? formatCurrency(c.additionalAmount || 0) : 'R$ 0,00',
       c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00'
     ]);
 
@@ -295,6 +305,8 @@ export class BprPdfService {
         'Metas',
         'Fator BPR',
         'Status',
+        'Rateio Nível (R$)',
+        '+ Adicional (R$)',
         'Valor Final (R$)'
       ]],
       body: candidateRows,
@@ -303,24 +315,26 @@ export class BprPdfService {
         fillColor: [30, 41, 59],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 7.5,
+        fontSize: 7,
         halign: 'left'
       },
       bodyStyles: {
-        fontSize: 7.5,
+        fontSize: 7,
         textColor: [30, 41, 59]
       },
       columnStyles: {
-        0: { cellWidth: 55 },
-        1: { cellWidth: 20 },
-        2: { cellWidth: 32 },
-        3: { cellWidth: 38 },
-        4: { cellWidth: 24 },
-        5: { cellWidth: 16 },
-        6: { cellWidth: 16, halign: 'center' },
-        7: { cellWidth: 20, halign: 'center' },
-        8: { cellWidth: 18, halign: 'center' },
-        9: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
+        0: { cellWidth: 45 },
+        1: { cellWidth: 16 },
+        2: { cellWidth: 26 },
+        3: { cellWidth: 31 },
+        4: { cellWidth: 21 },
+        5: { cellWidth: 14 },
+        6: { cellWidth: 13, halign: 'center' },
+        7: { cellWidth: 17, halign: 'center' },
+        8: { cellWidth: 17, halign: 'center' },
+        9: { cellWidth: 23, halign: 'right' },
+        10: { cellWidth: 21, halign: 'right' },
+        11: { cellWidth: 25, halign: 'right', fontStyle: 'bold' }
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252]
@@ -329,6 +343,8 @@ export class BprPdfService {
         'TOTAL GERAL RATEADO (RECORTE)',
         '', '', '', '', '', '', '',
         `${totalFilteredEligible} elegíveis`,
+        formatCurrency(totalFilteredRateio),
+        formatCurrency(totalFilteredAdditional),
         formatCurrency(totalFilteredDistributed)
       ]],
       footStyles: {
@@ -379,7 +395,9 @@ export class BprPdfService {
     const studyDateFormatted = meta?.studyDate ? formatDatePtBr(meta.studyDate) : formatDatePtBr(new Date().toISOString().slice(0, 10));
 
     // Filtragem dos Colaboradores
-    const filteredCandidates = this.filterCandidates(summary.candidates, meta);
+    const filteredCandidates = this.filterCandidates(summary.candidates || [], meta);
+    const totalFilteredRateio = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.rateioAmount ?? c.allocatedAmount) : 0), 0);
+    const totalFilteredAdditional = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.additionalAmount || 0) : 0), 0);
     const totalFilteredDistributed = filteredCandidates.reduce((s, c) => s + (c.isEligible ? c.allocatedAmount : 0), 0);
     const totalFilteredEligible = filteredCandidates.filter(c => c.isEligible).length;
     const totalFilteredIneligible = filteredCandidates.filter(c => !c.isEligible).length;
@@ -645,7 +663,9 @@ export class BprPdfService {
               <tr>
                 <th>Camada / Perfil</th>
                 <th style="text-align: center;">% Rateio</th>
-                <th style="text-align: right;">Montante da Camada</th>
+                <th style="text-align: right;">Montante Bruto</th>
+                <th style="text-align: right;">(-) Adic. Abatido</th>
+                <th style="text-align: right;">Montante Líquido</th>
                 <th style="text-align: center;">Elegíveis Globais</th>
                 <th style="text-align: right;">Valor Base por Pessoa</th>
               </tr>
@@ -654,6 +674,8 @@ export class BprPdfService {
               <tr>
                 <td><strong>Estratégico (E)</strong></td>
                 <td style="text-align: center;">${summary.layers.E.allocatedPercentage}%</td>
+                <td class="amount-cell">${formatCurrency(summary.layers.E.grossLayerAmount ?? summary.layers.E.totalLayerAmount)}</td>
+                <td class="amount-cell" style="color: #b45309;">${formatCurrency(summary.layers.E.additionalDeductedFromLayer || 0)}</td>
                 <td class="amount-cell">${formatCurrency(summary.layers.E.totalLayerAmount)}</td>
                 <td style="text-align: center;">${summary.layers.E.eligibleCount} colaborador(es)</td>
                 <td class="amount-cell" style="color: #1d4ed8;">${formatCurrency(summary.layers.E.amountPerEligible)}</td>
@@ -661,6 +683,8 @@ export class BprPdfService {
               <tr>
                 <td><strong>Tático (T)</strong></td>
                 <td style="text-align: center;">${summary.layers.T.allocatedPercentage}%</td>
+                <td class="amount-cell">${formatCurrency(summary.layers.T.grossLayerAmount ?? summary.layers.T.totalLayerAmount)}</td>
+                <td class="amount-cell" style="color: #b45309;">${formatCurrency(summary.layers.T.additionalDeductedFromLayer || 0)}</td>
                 <td class="amount-cell">${formatCurrency(summary.layers.T.totalLayerAmount)}</td>
                 <td style="text-align: center;">${summary.layers.T.eligibleCount} colaborador(es)</td>
                 <td class="amount-cell" style="color: #4338ca;">${formatCurrency(summary.layers.T.amountPerEligible)}</td>
@@ -668,6 +692,8 @@ export class BprPdfService {
               <tr>
                 <td><strong>Operacional / CLTs (O)</strong></td>
                 <td style="text-align: center;">${summary.layers.O.allocatedPercentage}%</td>
+                <td class="amount-cell">${formatCurrency(summary.layers.O.grossLayerAmount ?? summary.layers.O.totalLayerAmount)}</td>
+                <td class="amount-cell" style="color: #b45309;">${formatCurrency(summary.layers.O.additionalDeductedFromLayer || 0)}</td>
                 <td class="amount-cell">${formatCurrency(summary.layers.O.totalLayerAmount)}</td>
                 <td style="text-align: center;">${summary.layers.O.eligibleCount} colaborador(es)</td>
                 <td class="amount-cell" style="color: #047857;">${formatCurrency(summary.layers.O.amountPerEligible)}</td>
@@ -689,13 +715,15 @@ export class BprPdfService {
               <th style="text-align: center;">Metas</th>
               <th style="text-align: center;">Fator</th>
               <th style="text-align: center;">Status</th>
+              <th style="text-align: right;">Rateio Nível (R$)</th>
+              <th style="text-align: right;">+ Adicional (R$)</th>
               <th style="text-align: right;">Valor Final BPR</th>
             </tr>
           </thead>
           <tbody>
             ${filteredCandidates.length === 0 ? `
               <tr>
-                <td colspan="10" style="text-align: center; padding: 20px; color: #94a3b8;">
+                <td colspan="12" style="text-align: center; padding: 20px; color: #94a3b8;">
                   Nenhum colaborador encontrado para os filtros selecionados neste recorte.
                 </td>
               </tr>
@@ -714,6 +742,12 @@ export class BprPdfService {
                     ${c.isEligible ? 'Elegível' : 'Inelegível'}
                   </span>
                 </td>
+                <td class="amount-cell" style="color: ${c.isEligible ? '#334155' : '#94a3b8'};">
+                  ${c.isEligible ? formatCurrency(c.rateioAmount ?? c.allocatedAmount) : 'R$ 0,00'}
+                </td>
+                <td class="amount-cell" style="color: ${c.isEligible && (c.additionalAmount || 0) > 0 ? '#b45309' : '#94a3b8'};">
+                  ${c.isEligible ? formatCurrency(c.additionalAmount || 0) : 'R$ 0,00'}
+                </td>
                 <td class="amount-cell" style="color: ${c.isEligible ? '#047857' : '#94a3b8'};">
                   ${c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00'}
                 </td>
@@ -722,8 +756,13 @@ export class BprPdfService {
           </tbody>
           <tfoot>
             <tr style="background: #f1f5f9; font-weight: 900;">
-              <td colspan="8">TOTAL NO RECORTE (${totalFilteredEligible} COLABORADORES ELEGÍVEIS)</td>
-              <td style="text-align: center;">—</td>
+              <td colspan="9">TOTAL NO RECORTE (${totalFilteredEligible} COLABORADORES ELEGÍVEIS)</td>
+              <td class="amount-cell" style="color: #334155; font-size: 10.5px;">
+                ${formatCurrency(totalFilteredRateio)}
+              </td>
+              <td class="amount-cell" style="color: #b45309; font-size: 10.5px;">
+                ${formatCurrency(totalFilteredAdditional)}
+              </td>
               <td class="amount-cell" style="color: #047857; font-size: 11px;">
                 ${formatCurrency(totalFilteredDistributed)}
               </td>

@@ -4,6 +4,8 @@ export type BprCamada = 'E' | 'T' | 'O'; // Estratégico, Tático, Operacional
 
 export type BprSplitMode = 'percentage' | 'amount'; // Rateio por % ou por Valor R$ Fixo
 
+export type BprAdditionalDeductionSource = 'total_pool' | 'own_layer' | BprCamada;
+
 export interface BprTierSplit {
   E: number; // % Estratégico (ex: 30)
   T: number; // % Tático (ex: 40)
@@ -26,6 +28,8 @@ export interface BprRuleConfig {
   splitMode?: BprSplitMode; // 'percentage' | 'amount'
   tierSplits: BprTierSplit; // Percentuais por camada
   tierAmounts?: BprTierAmounts; // Valores fixos em R$ por camada
+  additionalAmounts?: Record<string, number>; // Mapa employeeId -> valor adicional em R$
+  additionalDeductionSource?: BprAdditionalDeductionSource; // 'total_pool' (padrão) | 'own_layer' | 'E' | 'T' | 'O'
   allowGlosados: boolean;
   selectedGlosadosExceptions: string[]; // IDs de colaboradores glosados que farão jus excepcionalmente
   allowInativos: boolean;
@@ -92,8 +96,10 @@ export interface BprCandidateResult {
   ineligibilityReasons: string[];
   
   // Valores Financeiros Calculados
-  baseAmount: number;      // R$ valor base cheio da camada
-  allocatedAmount: number; // R$ valor individual após aplicar fator de desempenho (baseAmount * performanceFactor)
+  baseAmount: number;        // R$ valor base cheio da camada
+  rateioAmount?: number;     // R$ valor do rateio da camada após fator de desempenho (baseAmount * performanceFactor)
+  additionalAmount?: number; // R$ valor adicional individual inserido para o colaborador
+  allocatedAmount: number;   // R$ valor individual final (rateioAmount + additionalAmount)
 }
 
 export interface BprLayerSummary {
@@ -101,6 +107,8 @@ export interface BprLayerSummary {
   label: string;
   allocatedPercentage: number;
   totalLayerAmount: number;
+  grossLayerAmount?: number;            // R$ montante bruto da camada antes de abatimento de adicionais
+  additionalDeductedFromLayer?: number; // R$ valor de adicionais descontado desta camada
   eligibleCount: number;
   ineligibleCount: number;
   amountPerEligible: number;
@@ -108,6 +116,8 @@ export interface BprLayerSummary {
 
 export interface BprCalculationSummary {
   totalPoolAmount: number;
+  totalAdditionalAmount?: number; // R$ soma de todos os valores adicionais dos elegíveis
+  netPoolForLayers?: number;      // R$ saldo líquido efetivamente rateado entre as camadas E, T e O
   totalDistributedAmount: number;
   residualAmount: number;
   totalCandidates: number;
@@ -129,6 +139,8 @@ export interface BprSavedScenario {
   config: BprRuleConfig;       // Configurações do simulador
   summary: {
     totalPoolAmount: number;
+    totalAdditionalAmount?: number;
+    netPoolForLayers?: number;
     totalDistributedAmount: number;
     residualAmount: number;
     totalCandidates: number;

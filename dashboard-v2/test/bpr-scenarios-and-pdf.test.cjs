@@ -727,4 +727,131 @@ assert.strictEqual(Math.round(deuzelinaRes.subtotal * 100) / 100, 5823.98);
 assert.strictEqual(Math.round(deuzelinaRes.liquido * 100) / 100, 0.02);
 console.log('   ✅ Equação unificada com Adiantamento Salarial recomposto e isolamento de Proventos/Horas Extras validada centavo a centavo.');
 
+// 17. Testando Valor Adicional por Colaborador e Regras de Abatimento no BprService real
+console.log('\n17. Testando Valor Adicional por Colaborador e Regras de Abatimento (Total Rateado vs Camada vs Redução Manual)...');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const ts = require('typescript');
+
+function loadRealBprService() {
+  const filePath = path.resolve(__dirname, '../src/services/bpr.service.ts');
+  const source = fs.readFileSync(filePath, 'utf8');
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
+  });
+  const mod = { exports: {} };
+  const sandbox = {
+    module: mod,
+    exports: mod.exports,
+    require: (id) => {
+      if (id === '@/types/loans') {
+        return {
+          getPBClassification: () => 'O',
+          normalizeCompanyName: (c) => c || 'MarBR',
+        };
+      }
+      if (id === '@/types/bpr') return {};
+      if (id === '@/lib/supabase') return { supabase: {} };
+      return require(id);
+    },
+    console,
+    Math,
+    Number,
+    String,
+    Array,
+    Object,
+    Date,
+    Set,
+    Map,
+    JSON,
+    parseFloat,
+    parseInt,
+    isNaN,
+  };
+  vm.runInNewContext(transpiled.outputText, sandbox);
+  return mod.exports.BprService;
+}
+
+const RealBprService = loadRealBprService();
+const baseCandidatesForAdd = [
+  { employeeId: 'e1', name: 'Diretor 1', company: 'MarBR', department: 'Dir', jobRole: 'Diretor', linkType: 'PJ', isOutsourced: false, camada: 'E', camadaLabel: 'Estratégico', status: 'Ativo', performanceFactor: 1.0, admittedBeforeOrAtCycleStart: true, activeThroughoutCycle: true, activeAtPaymentDate: true, hasGlosaInPeriod: false, isInactiveAtPaymentDate: false, isManuallyExcluded: false, isEligible: true, isExceptionApplied: false, ineligibilityReasons: [], baseAmount: 0, allocatedAmount: 0 },
+  { employeeId: 't1', name: 'Gerente 1', company: 'MarBR', department: 'Ops', jobRole: 'Gerente', linkType: 'CLT', isOutsourced: false, camada: 'T', camadaLabel: 'Tático', status: 'Ativo', performanceFactor: 1.0, admittedBeforeOrAtCycleStart: true, activeThroughoutCycle: true, activeAtPaymentDate: true, hasGlosaInPeriod: false, isInactiveAtPaymentDate: false, isManuallyExcluded: false, isEligible: true, isExceptionApplied: false, ineligibilityReasons: [], baseAmount: 0, allocatedAmount: 0 },
+  { employeeId: 'o1', name: 'Analista 1', company: 'MarBR', department: 'Ops', jobRole: 'Analista', linkType: 'CLT', isOutsourced: false, camada: 'O', camadaLabel: 'Operacional/CLTs', status: 'Ativo', performanceFactor: 1.0, admittedBeforeOrAtCycleStart: true, activeThroughoutCycle: true, activeAtPaymentDate: true, hasGlosaInPeriod: false, isInactiveAtPaymentDate: false, isManuallyExcluded: false, isEligible: true, isExceptionApplied: false, ineligibilityReasons: [], baseAmount: 0, allocatedAmount: 0 },
+  { employeeId: 'o2', name: 'Analista Inelegivel', company: 'MarBR', department: 'Ops', jobRole: 'Analista', linkType: 'CLT', isOutsourced: false, camada: 'O', camadaLabel: 'Operacional/CLTs', status: 'Inativo', performanceFactor: 1.0, admittedBeforeOrAtCycleStart: true, activeThroughoutCycle: false, activeAtPaymentDate: false, hasGlosaInPeriod: false, isInactiveAtPaymentDate: true, isManuallyExcluded: false, isEligible: false, isExceptionApplied: false, ineligibilityReasons: ['Inativo'], baseAmount: 0, allocatedAmount: 0 },
+];
+
+// Caso 1: Padrão (total_pool) — níveis somam 100%, adicional de R$ 10.000 em o1 é descontado do Montante Total (100k -> 90k)
+const cfgTotalPool = {
+  ...RealBprService.getDefaultConfig('ciclo_1', 2026),
+  totalPoolAmount: 100000,
+  splitMode: 'percentage',
+  tierSplits: { E: 30, T: 40, O: 30 },
+  additionalDeductionSource: 'total_pool',
+  additionalAmounts: { o1: 10000 },
+};
+const resTotalPool = RealBprService.recalculateSnapshotWithNewConfig(baseCandidatesForAdd, cfgTotalPool);
+assert.strictEqual(resTotalPool.totalPoolAmount, 100000);
+assert.strictEqual(resTotalPool.totalAdditionalAmount, 10000);
+assert.strictEqual(resTotalPool.netPoolForLayers, 90000);
+assert.strictEqual(resTotalPool.layers.E.totalLayerAmount, 27000); // 30k - 3k
+assert.strictEqual(resTotalPool.layers.T.totalLayerAmount, 36000); // 40k - 4k
+assert.strictEqual(resTotalPool.layers.O.totalLayerAmount, 27000); // 30k - 3k
+const o1TotalPool = resTotalPool.candidates.find(c => c.employeeId === 'o1');
+assert.strictEqual(o1TotalPool.rateioAmount, 27000);
+assert.strictEqual(o1TotalPool.additionalAmount, 10000);
+assert.strictEqual(o1TotalPool.allocatedAmount, 37000);
+assert.strictEqual(resTotalPool.totalDistributedAmount, 100000);
+
+// Caso 2: Redução de camada específica ('E') — desconta R$ 10.000 exclusivamente do Estratégico
+const cfgDeductE = { ...cfgTotalPool, additionalDeductionSource: 'E' };
+const resDeductE = RealBprService.recalculateSnapshotWithNewConfig(baseCandidatesForAdd, cfgDeductE);
+assert.strictEqual(resDeductE.layers.E.grossLayerAmount, 30000);
+assert.strictEqual(resDeductE.layers.E.additionalDeductedFromLayer, 10000);
+assert.strictEqual(resDeductE.layers.E.totalLayerAmount, 20000);
+assert.strictEqual(resDeductE.layers.T.totalLayerAmount, 40000);
+assert.strictEqual(resDeductE.layers.O.totalLayerAmount, 30000);
+assert.strictEqual(resDeductE.totalDistributedAmount, 100000);
+
+// Caso 3: Redução da própria camada ('own_layer') — t1 +6.000 (sai de T), o1 +4.000 (sai de O), E intacto
+const cfgOwnLayer = {
+  ...cfgTotalPool,
+  additionalDeductionSource: 'own_layer',
+  additionalAmounts: { t1: 6000, o1: 4000 },
+};
+const resOwnLayer = RealBprService.recalculateSnapshotWithNewConfig(baseCandidatesForAdd, cfgOwnLayer);
+assert.strictEqual(resOwnLayer.layers.E.totalLayerAmount, 30000);
+assert.strictEqual(resOwnLayer.layers.T.totalLayerAmount, 34000);
+assert.strictEqual(resOwnLayer.layers.O.totalLayerAmount, 26000);
+assert.strictEqual(resOwnLayer.totalDistributedAmount, 100000);
+
+// Caso 4: Redução manual no percentual de uma camada (E reduzido de 30% -> 20%, soma 90%) -> zero duplo desconto
+const cfgManualReduced = {
+  ...cfgTotalPool,
+  tierSplits: { E: 20, T: 40, O: 30 },
+  additionalDeductionSource: 'total_pool',
+  additionalAmounts: { o1: 10000 },
+};
+const resManualReduced = RealBprService.recalculateSnapshotWithNewConfig(baseCandidatesForAdd, cfgManualReduced);
+assert.strictEqual(resManualReduced.layers.E.totalLayerAmount, 20000);
+assert.strictEqual(resManualReduced.layers.E.additionalDeductedFromLayer, 0);
+assert.strictEqual(resManualReduced.layers.T.totalLayerAmount, 40000);
+assert.strictEqual(resManualReduced.layers.O.totalLayerAmount, 30000);
+assert.strictEqual(resManualReduced.netPoolForLayers, 90000);
+assert.strictEqual(resManualReduced.totalDistributedAmount, 100000);
+
+// Caso 5: Colaborador inelegível com adicional no mapa não recebe nem abate do pool
+const cfgIneligible = {
+  ...cfgTotalPool,
+  additionalAmounts: { o2: 5000 },
+};
+const resIneligible = RealBprService.recalculateSnapshotWithNewConfig(baseCandidatesForAdd, cfgIneligible);
+const o2Res = resIneligible.candidates.find(c => c.employeeId === 'o2');
+assert.strictEqual(resIneligible.totalAdditionalAmount, 0);
+assert.strictEqual(o2Res.additionalAmount, 0);
+assert.strictEqual(o2Res.allocatedAmount, 0);
+assert.strictEqual(resIneligible.netPoolForLayers, 100000);
+
+console.log('   ✅ Regras de Valor Adicional por colaborador (Total Rateado, Camada Específica, Própria Camada, Redução Manual e Inelegível) validadas com precisão centavo a centavo!');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');
