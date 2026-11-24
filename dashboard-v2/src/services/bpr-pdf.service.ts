@@ -6,8 +6,49 @@ import {
   BprSavedScenario,
   BprCandidateResult,
   BprCamada,
-  BprLayerRelativeWeight
+  BprLayerRelativeWeight,
+  BprDedicatedGroupSummary
 } from '@/types/bpr';
+
+const formatDedicatedGroupFunding = (src: string): string => {
+  const map: Record<string, string> = {
+    total_pool: 'Abate do Bolo Geral',
+    extra_bonus: 'Acréscimo Extra (Não Abate)',
+    E: 'Abate da Camada E',
+    T: 'Abate da Camada T',
+    O: 'Abate da Camada O',
+  };
+  return map[src] || src;
+};
+
+const formatDedicatedGroupModeAndRules = (gs: BprDedicatedGroupSummary): string => {
+  const modeMap: Record<string, string> = {
+    equal: 'Igualitário',
+    percentage: '% por Pessoa',
+    amount: 'Valor Fixo R$',
+  };
+  const modeLabel = modeMap[gs.distributionMode] || gs.distributionMode;
+  const eligLabel = gs.eligibilityPolicy === 'follow_bpr_rules' ? 'Regras BPR' : 'Exceção Integral';
+  const factorPart = gs.applyPerformanceFactor
+    ? ` (Fator ${gs.reducedFactorPct ?? 75}%${gs.redistributePerformanceResidual ? ' · Redist.' : ''})`
+    : ' (Sem corte)';
+  return `${modeLabel} · ${eligLabel}${factorPart}`;
+};
+
+const formatDedicatedGroupMembersCount = (gs: BprDedicatedGroupSummary): string => {
+  const elig = gs.eligibleMemberCount ?? gs.memberCount;
+  const inel = gs.ineligibleMemberCount || 0;
+  return inel > 0 ? `${elig} eleg. (+${inel} inel.)` : `${elig} eleg.`;
+};
+
+const formatCandidateFactorCell = (c: BprCandidateResult): string => {
+  if (!c.dedicatedGroupId) return c.performanceFactorLabel || '100%';
+  if (!c.isEligible) return 'Inelegível (BPR)';
+  const pct = c.dedicatedGroupEffectiveFactorPct ?? 100;
+  return (c.dedicatedGroupRedistributedBonus || 0) > 0
+    ? `Grupo (${pct}% + redist.)`
+    : `Grupo (${pct}%)`;
+};
 
 const formatCurrency = (val: number) => 
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
@@ -384,28 +425,15 @@ export class BprPdfService {
         return ids.includes(gs.groupId);
       });
       if (visibleDedicatedSummaries.length > 0) {
-        const fundingMap: Record<string, string> = {
-          total_pool: 'Abate do Bolo Geral',
-          extra_bonus: 'Acréscimo Extra (Não Abate)',
-          E: 'Abate da Camada E',
-          T: 'Abate da Camada T',
-          O: 'Abate da Camada O',
-        };
-        const modeMap: Record<string, string> = {
-          equal: 'Igualitário',
-          percentage: '% por Pessoa',
-          amount: 'Valor Fixo R$',
-        };
-
         autoTable(doc, {
           startY: nextY,
-          head: [['Grupo de Montante Específico (Exclusivo)', 'Critério / Observação', 'Origem do Recurso', 'Rateio', 'Membros', 'Montante Grupo', 'Total Alocado']],
+          head: [['Grupo de Montante Específico (Exclusivo)', 'Critério / Observação', 'Origem do Recurso', 'Rateio / Regra', 'Membros', 'Montante Grupo', 'Total Alocado']],
           body: visibleDedicatedSummaries.map(gs => [
             gs.name,
             gs.criteriaDescription || '—',
-            fundingMap[gs.fundingSource] || gs.fundingSource,
-            modeMap[gs.distributionMode] || gs.distributionMode,
-            `${gs.memberCount} pessoa(s)`,
+            formatDedicatedGroupFunding(gs.fundingSource),
+            formatDedicatedGroupModeAndRules(gs),
+            formatDedicatedGroupMembersCount(gs),
             formatCurrency(gs.poolAmount),
             formatCurrency(gs.allocatedTotal)
           ]),
@@ -435,11 +463,9 @@ export class BprPdfService {
         ? `Mont.: ${formatCurrency(c.periodReceivedTotal || 0)}\nMédia (${c.periodMonthsCount}m): ${formatCurrency(c.periodReceivedAverage || 0)}\nBPR: ${formatPctPtBr(c.bprVsAveragePct)} méd. · ${formatPctPtBr(c.bprVsTotalPct)} mont.`
         : 'Sem histórico';
       const camadaCell = c.dedicatedGroupId
-        ? `Grupo: ${c.dedicatedGroupName} (${formatPctPtBr(c.dedicatedGroupSharePct)})`
+        ? `Grupo: ${c.dedicatedGroupName} (${c.isEligible ? formatPctPtBr(c.dedicatedGroupSharePct) : 'Ineleg.'})`
         : c.camadaLabel;
-      const fatorCell = c.dedicatedGroupId
-        ? 'Grupo Exclusivo'
-        : (c.performanceFactorLabel || '100%');
+      const fatorCell = formatCandidateFactorCell(c);
 
       return [
         c.corporateName || c.name,
@@ -932,36 +958,24 @@ export class BprPdfService {
                   <th>Grupo</th>
                   <th>Critério / Observação</th>
                   <th>Origem do Recurso</th>
-                  <th>Rateio</th>
+                  <th>Rateio / Regra</th>
                   <th style="text-align: center;">Membros</th>
                   <th style="text-align: right;">Montante Grupo</th>
                   <th style="text-align: right;">Total Alocado</th>
                 </tr>
               </thead>
               <tbody>
-                ${visibleHtmlDedicatedSummaries.map(gs => {
-                  const fundingLabel = gs.fundingSource === 'total_pool'
-                    ? 'Abate do Bolo Geral'
-                    : gs.fundingSource === 'extra_bonus'
-                      ? 'Acréscimo Extra (Não Abate)'
-                      : `Abate da Camada ${gs.fundingSource}`;
-                  const modeLabel = gs.distributionMode === 'equal'
-                    ? 'Igualitário'
-                    : gs.distributionMode === 'percentage'
-                      ? '% por Pessoa'
-                      : 'Valor Fixo R$';
-                  return `
+                ${visibleHtmlDedicatedSummaries.map(gs => `
                     <tr>
                       <td><strong>${escapeHtml(gs.name)}</strong></td>
                       <td>${escapeHtml(gs.criteriaDescription || '—')}</td>
-                      <td>${escapeHtml(fundingLabel)}</td>
-                      <td>${escapeHtml(modeLabel)}</td>
-                      <td style="text-align: center;">${gs.memberCount} pessoa(s)</td>
+                      <td>${escapeHtml(formatDedicatedGroupFunding(gs.fundingSource))}</td>
+                      <td>${escapeHtml(formatDedicatedGroupModeAndRules(gs))}</td>
+                      <td style="text-align: center;">${escapeHtml(formatDedicatedGroupMembersCount(gs))}</td>
                       <td class="amount-cell">${formatCurrency(gs.poolAmount)}</td>
                       <td class="amount-cell" style="color: #0f766e;">${formatCurrency(gs.allocatedTotal)}</td>
                     </tr>
-                  `;
-                }).join('')}
+                  `).join('')}
               </tbody>
             </table>
           ` : ''}
@@ -1001,10 +1015,10 @@ export class BprPdfService {
                 <td>${escapeHtml(c.company)}</td>
                 <td>${escapeHtml(c.department)}</td>
                 <td>${escapeHtml(c.jobRole)}</td>
-                <td>${c.dedicatedGroupId ? `<strong style="color: #0f766e;">Grupo: ${escapeHtml(c.dedicatedGroupName || '')}</strong><div style="font-size: 8px; color: #64748b;">${formatPctPtBr(c.dedicatedGroupSharePct)} · Origem ${escapeHtml(c.camada)}</div>` : escapeHtml(c.camadaLabel)}</td>
+                <td>${c.dedicatedGroupId ? `<strong style="color: #0f766e;">Grupo: ${escapeHtml(c.dedicatedGroupName || '')}</strong><div style="font-size: 8px; color: #64748b;">${c.isEligible ? formatPctPtBr(c.dedicatedGroupSharePct) : 'Inelegível'} · Origem ${escapeHtml(c.camada)}</div>` : escapeHtml(c.camadaLabel)}</td>
                 <td>${escapeHtml(c.linkType)}</td>
                 <td style="text-align: center;">${c.monthlyAverageScore !== undefined ? `${c.monthlyAverageScore}%` : '100%'}</td>
-                <td style="text-align: center;">${c.dedicatedGroupId ? 'Grupo Exclusivo' : escapeHtml(c.performanceFactorLabel || '100%')}</td>
+                <td style="text-align: center;">${escapeHtml(formatCandidateFactorCell(c))}</td>
                 <td style="text-align: center;">
                   <span class="${c.isEligible ? 'badge-eligible' : 'badge-ineligible'}">
                     ${c.isEligible ? (c.dedicatedGroupId ? 'Grupo Excl.' : 'Elegível') : 'Inelegível'}
@@ -1190,7 +1204,7 @@ export class BprPdfService {
           const key = normalizeSearchText(cleanName) || (c.dedicatedGroupId || 'grupo');
           const cur = fallbackGroups.get(key) || { name: cleanName, allocated: 0, members: 0 };
           cur.allocated = Number((cur.allocated + (c.isEligible ? (c.rateioAmount ?? c.allocatedAmount ?? 0) : 0)).toFixed(2));
-          cur.members += 1;
+          if (c.isEligible) cur.members += 1;
           fallbackGroups.set(key, cur);
         });
         fallbackGroups.forEach((fg, key) => {

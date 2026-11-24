@@ -11,7 +11,10 @@ import {
   BprCycle,
   BprSavedScenario,
   BprSavedRun,
-  BprDedicatedGroupSummary
+  BprDedicatedGroup,
+  BprDedicatedGroupSummary,
+  BprDedicatedGroupEligibilityPolicy,
+  BprDedicatedGroupImpactPreview
 } from '@/types/bpr';
 import { supabase } from '@/lib/supabase';
 import { calculateRowFinancials } from '@/services/people-hr.service';
@@ -486,7 +489,16 @@ export class BprService {
     const claimedMemberIds = new Set<string>();
     const memberAssignment = new Map<
       string,
-      { groupId: string; groupName: string; shareAmount: number; sharePct: number }
+      {
+        groupId: string;
+        groupName: string;
+        isEligibleInGroup: boolean;
+        baseShare: number;
+        shareAmount: number;
+        sharePct: number;
+        effectiveFactorPct: number;
+        redistributedBonus: number;
+      }
     >();
     const dedicatedGroupSummaries: BprDedicatedGroupSummary[] = [];
     let dedicatedGroupsTotalPool = 0;
@@ -510,71 +522,159 @@ export class BprService {
         if (validMembers.length === 0) return;
         validMembers.forEach(m => claimedMemberIds.add(m.employeeId));
 
+        // Retrocompatibilidade: grupos legados (sem os novos campos) preservam inclusão como exceção sem corte de 75%
+        const eligibilityPolicy: BprDedicatedGroupEligibilityPolicy =
+          group.eligibilityPolicy ?? 'include_all_as_exception';
+        const applyPerf = group.applyPerformanceFactor ?? false;
+        const reducedFactorPct = Math.min(100, Math.max(0, Number(group.reducedFactorPct ?? 75)));
+        const shouldRedistribute = group.redistributePerformanceResidual ?? true;
+
+        const eligibleMembers = eligibilityPolicy === 'follow_bpr_rules'
+          ? validMembers.filter(m => candidateById.get(m.employeeId)?.isEligible === true)
+          : validMembers;
+        const ineligibleMembers = validMembers.filter(
+          m => !eligibleMembers.some(em => em.employeeId === m.employeeId)
+        );
+
+        const groupNameTrimmed = (group.name || 'Grupo Específico').trim();
         const mode = group.distributionMode || 'equal';
         let effectiveGroupPool = Math.max(0, round2(Number(group.poolAmount || 0)));
-        let groupAllocated = 0;
 
-        if (mode === 'equal') {
-          const perMember = validMembers.length > 0 ? round2(effectiveGroupPool / validMembers.length) : 0;
-          const sharePct = validMembers.length > 0 ? round2(100 / validMembers.length) : 0;
-          validMembers.forEach(m => {
-            groupAllocated = round2(groupAllocated + perMember);
-            memberAssignment.set(m.employeeId, {
-              groupId: group.id,
-              groupName: (group.name || 'Grupo Específico').trim(),
-              shareAmount: perMember,
-              sharePct,
-            });
-          });
-        } else if (mode === 'percentage') {
-          validMembers.forEach(m => {
+        // Calcular cota base bruta por membro elegível do grupo
+        const prepared = eligibleMembers.map(m => {
+          const cand = candidateById.get(m.employeeId)!;
+          let rawBase = 0;
+          if (mode === 'equal') {
+            rawBase = eligibleMembers.length > 0 ? round2(effectiveGroupPool / eligibleMembers.length) : 0;
+          } else if (mode === 'percentage') {
             const pct = Math.max(0, Number(m.percentage || 0));
-            const shareAmount = round2((effectiveGroupPool * pct) / 100);
-            groupAllocated = round2(groupAllocated + shareAmount);
-            memberAssignment.set(m.employeeId, {
-              groupId: group.id,
-              groupName: (group.name || 'Grupo Específico').trim(),
-              shareAmount,
-              sharePct: round2(pct),
-            });
-          });
-        } else {
-          // mode === 'amount'
-          const memberAmounts = validMembers.map(m => ({
-            employeeId: m.employeeId,
-            amount: Math.max(0, round2(Number(m.amount || 0))),
-          }));
-          const sumAmounts = round2(memberAmounts.reduce((acc, item) => acc + item.amount, 0));
-          effectiveGroupPool = Math.max(effectiveGroupPool, sumAmounts);
-          memberAmounts.forEach(item => {
-            groupAllocated = round2(groupAllocated + item.amount);
-            const sharePct = effectiveGroupPool > 0 ? round2((item.amount / effectiveGroupPool) * 100) : 0;
-            memberAssignment.set(item.employeeId, {
-              groupId: group.id,
-              groupName: (group.name || 'Grupo Específico').trim(),
-              shareAmount: item.amount,
-              sharePct,
-            });
-          });
+            rawBase = round2((effectiveGroupPool * pct) / 100);
+          } else {
+            rawBase = Math.max(0, round2(Number(m.amount || 0)));
+          }
+
+          // Fator efetivo (%): campo manual customFactorPct tem prioridade; senão usa regra de desempenho se habilitada
+          const hasCustomFactor =
+            m.customFactorPct !== undefined &&
+            m.customFactorPct !== null &&
+            !Number.isNaN(Number(m.customFactorPct));
+          let factorPct = 100;
+          if (hasCustomFactor) {
+            factorPct = Math.min(100, Math.max(0, Number(m.customFactorPct)));
+          } else if (applyPerf) {
+            const perf = cand.performanceFactor ?? 1.0;
+            if (perf >= 1.0) factorPct = 100;
+            else if (perf > 0) factorPct = reducedFactorPct;
+            else factorPct = 0;
+          }
+
+          return { member: m, rawBase, factorPct: round2(factorPct) };
+        });
+
+        if (mode === 'amount') {
+          const sumRawAmounts = round2(prepared.reduce((acc, item) => acc + item.rawBase, 0));
+          effectiveGroupPool = Math.max(effectiveGroupPool, sumRawAmounts);
         }
+
+        // Aplicar fator e apurar saldo retido para eventual redistribuição entre os demais membros elegíveis
+        let retainedPool = 0;
+        const afterFactorItems = prepared.map(item => {
+          const afterFactor = round2(item.rawBase * (item.factorPct / 100));
+          const ret = Math.max(0, round2(item.rawBase - afterFactor));
+          retainedPool = round2(retainedPool + ret);
+          return { ...item, afterFactor, redistBonus: 0 };
+        });
+
+        let redistributedAmount = 0;
+        if (shouldRedistribute && retainedPool > 0.005) {
+          const primaryItems = afterFactorItems.filter(it => it.factorPct >= 100 && it.rawBase > 0);
+          const sumPrimaryBase = round2(primaryItems.reduce((acc, it) => acc + it.rawBase, 0));
+
+          if (sumPrimaryBase > 0) {
+            primaryItems.forEach(it => {
+              it.redistBonus = round2(retainedPool * (it.rawBase / sumPrimaryBase));
+              redistributedAmount = round2(redistributedAmount + it.redistBonus);
+            });
+          } else {
+            // Fallback secundário quando todos têm fator < 100% mas > 0%: redistribui proporcionalmente ao afterFactor
+            const fallbackItems = afterFactorItems.filter(it => it.afterFactor > 0);
+            const sumAfterFactor = round2(fallbackItems.reduce((acc, it) => acc + it.afterFactor, 0));
+            if (sumAfterFactor > 0) {
+              fallbackItems.forEach(it => {
+                it.redistBonus = round2(retainedPool * (it.afterFactor / sumAfterFactor));
+                redistributedAmount = round2(redistributedAmount + it.redistBonus);
+              });
+            }
+          }
+        }
+
+        let groupAllocated = 0;
+        afterFactorItems.forEach(item => {
+          const finalShare = round2(item.afterFactor + item.redistBonus);
+          groupAllocated = round2(groupAllocated + finalShare);
+
+          const nominalPct =
+            mode === 'equal'
+              ? (eligibleMembers.length > 0 ? round2(100 / eligibleMembers.length) : 0)
+              : mode === 'percentage'
+                ? round2(Math.max(0, Number(item.member.percentage || 0)))
+                : (effectiveGroupPool > 0 ? round2((item.rawBase / effectiveGroupPool) * 100) : 0);
+
+          const sharePct =
+            (item.redistBonus > 0 || item.factorPct < 100) && effectiveGroupPool > 0
+              ? round2((finalShare / effectiveGroupPool) * 100)
+              : nominalPct;
+
+          memberAssignment.set(item.member.employeeId, {
+            groupId: group.id,
+            groupName: groupNameTrimmed,
+            isEligibleInGroup: true,
+            baseShare: item.rawBase,
+            shareAmount: finalShare,
+            sharePct,
+            effectiveFactorPct: item.factorPct,
+            redistributedBonus: item.redistBonus,
+          });
+        });
+
+        ineligibleMembers.forEach(m => {
+          memberAssignment.set(m.employeeId, {
+            groupId: group.id,
+            groupName: groupNameTrimmed,
+            isEligibleInGroup: false,
+            baseShare: 0,
+            shareAmount: 0,
+            sharePct: 0,
+            effectiveFactorPct: 0,
+            redistributedBonus: 0,
+          });
+        });
 
         const groupResidual = Math.max(0, round2(effectiveGroupPool - groupAllocated));
         dedicatedGroupsTotalPool = round2(dedicatedGroupsTotalPool + effectiveGroupPool);
         dedicatedGroupsAllocatedTotal = round2(dedicatedGroupsAllocatedTotal + groupAllocated);
-        dedicatedMembersCount += validMembers.length;
+        dedicatedMembersCount += eligibleMembers.length;
         if (group.fundingSource === 'extra_bonus') {
           dedicatedGroupsExtraBonusTotal = round2(dedicatedGroupsExtraBonusTotal + effectiveGroupPool);
         }
 
         dedicatedGroupSummaries.push({
           groupId: group.id,
-          name: (group.name || 'Grupo Específico').trim(),
+          name: groupNameTrimmed,
           criteriaDescription: (group.criteriaDescription || '').trim() || undefined,
           fundingSource: group.fundingSource || 'total_pool',
           distributionMode: mode,
           poolAmount: effectiveGroupPool,
           allocatedTotal: groupAllocated,
-          memberCount: validMembers.length,
+          memberCount: eligibleMembers.length,
+          eligibleMemberCount: eligibleMembers.length,
+          ineligibleMemberCount: ineligibleMembers.length,
+          amountPerEligible: eligibleMembers.length > 0 ? round2(groupAllocated / eligibleMembers.length) : 0,
+          eligibilityPolicy,
+          applyPerformanceFactor: applyPerf,
+          reducedFactorPct,
+          redistributePerformanceResidual: shouldRedistribute,
+          redistributedAmount,
           residualAmount: groupResidual,
         });
       });
@@ -588,12 +688,17 @@ export class BprService {
     let totalAdditionalAmount = 0;
 
     candidates.forEach(c => {
-      const isDedicated = memberAssignment.has(c.employeeId);
-      if (isDedicated) {
-        // Membro em grupo dedicado é elegível exclusivamente pelo grupo (não entra no divisor E/T/O)
-        const addVal = Math.max(0, round2(Number(additionalMap[c.employeeId] || 0)));
-        additionalByOwnLayer[c.camada] = round2(additionalByOwnLayer[c.camada] + addVal);
-        totalAdditionalAmount = round2(totalAdditionalAmount + addVal);
+      const dedicated = memberAssignment.get(c.employeeId);
+      if (dedicated) {
+        if (dedicated.isEligibleInGroup) {
+          // Membro elegível em grupo dedicado recebe exclusivamente pelo grupo (não entra no divisor E/T/O)
+          const addVal = Math.max(0, round2(Number(additionalMap[c.employeeId] || 0)));
+          additionalByOwnLayer[c.camada] = round2(additionalByOwnLayer[c.camada] + addVal);
+          totalAdditionalAmount = round2(totalAdditionalAmount + addVal);
+        } else {
+          // Membro inelegível pela regra do BPR dentro do grupo: não entra no divisor nem recebe adicionais
+          layerIneligibleCounts[c.camada] = (layerIneligibleCounts[c.camada] || 0) + 1;
+        }
       } else if (c.isEligible) {
         layerEligibleCounts[c.camada] = (layerEligibleCounts[c.camada] || 0) + 1;
         const addVal = Math.max(0, round2(Number(additionalMap[c.employeeId] || 0)));
@@ -807,9 +912,30 @@ export class BprService {
       const dedicated = memberAssignment.get(c.employeeId);
 
       if (dedicated) {
+        if (!dedicated.isEligibleInGroup) {
+          return {
+            ...c,
+            isEligible: false,
+            dedicatedGroupId: dedicated.groupId,
+            dedicatedGroupName: dedicated.groupName,
+            dedicatedGroupSharePct: 0,
+            dedicatedGroupEffectiveFactorPct: 0,
+            dedicatedGroupRedistributedBonus: 0,
+            baseAmount: 0,
+            rateioAmount: 0,
+            additionalAmount: 0,
+            additionalReason: undefined,
+            allocatedAmount: 0,
+            periodReceivedTotal: periodTotal,
+            periodReceivedAverage: periodAvg,
+            periodMonthsCount: periodMonths,
+            bprVsAveragePct: 0,
+            bprVsTotalPct: 0
+          };
+        }
+
         const wasIneligible = !c.isEligible;
-        const baseVal = dedicated.shareAmount;
-        // Grupos dedicados respeitam integralmente o % ou R$ estabelecido (sem corte de 75% de desempenho)
+        const baseVal = dedicated.baseShare;
         const rateioVal = dedicated.shareAmount;
         const addVal = Math.max(0, round2(Number(additionalMap[c.employeeId] || 0)));
         const addReason = addVal > 0 ? ((reasonsMap[c.employeeId] || '').trim() || undefined) : undefined;
@@ -826,6 +952,8 @@ export class BprService {
           dedicatedGroupId: dedicated.groupId,
           dedicatedGroupName: dedicated.groupName,
           dedicatedGroupSharePct: dedicated.sharePct,
+          dedicatedGroupEffectiveFactorPct: dedicated.effectiveFactorPct,
+          dedicatedGroupRedistributedBonus: dedicated.redistributedBonus,
           baseAmount: baseVal,
           rateioAmount: rateioVal,
           additionalAmount: addVal,
@@ -855,6 +983,8 @@ export class BprService {
           dedicatedGroupId: undefined,
           dedicatedGroupName: undefined,
           dedicatedGroupSharePct: undefined,
+          dedicatedGroupEffectiveFactorPct: undefined,
+          dedicatedGroupRedistributedBonus: undefined,
           baseAmount: baseVal,
           rateioAmount: rateioVal,
           additionalAmount: addVal,
@@ -873,6 +1003,8 @@ export class BprService {
         dedicatedGroupId: undefined,
         dedicatedGroupName: undefined,
         dedicatedGroupSharePct: undefined,
+        dedicatedGroupEffectiveFactorPct: undefined,
+        dedicatedGroupRedistributedBonus: undefined,
         baseAmount: 0,
         rateioAmount: 0,
         additionalAmount: 0,
@@ -1095,6 +1227,105 @@ export class BprService {
     newConfig: BprRuleConfig
   ): BprCalculationSummary {
     return this.computeLayersAndAdditionalDistribution(candidatesSnapshot, newConfig);
+  }
+
+  private static buildImpactPreviewFromSummaries(
+    beforeSummary: BprCalculationSummary,
+    afterSummary: BprCalculationSummary,
+    targetGroup: BprDedicatedGroup | undefined,
+    targetGroupId: string
+  ): BprDedicatedGroupImpactPreview {
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const groupSummary = (afterSummary.dedicatedGroupSummaries || []).find(s => s.groupId === targetGroupId) || null;
+    const fundingSource = targetGroup?.fundingSource || groupSummary?.fundingSource || 'total_pool';
+    const targetPoolNeeded = groupSummary?.poolAmount ?? Math.max(0, round2(Number(targetGroup?.poolAmount || 0)));
+
+    const extractLayers = (summ: BprCalculationSummary) => ({
+      E: {
+        totalLayerAmount: summ.layers.E.totalLayerAmount,
+        eligibleCount: summ.layers.E.eligibleCount,
+        amountPerEligible: summ.layers.E.amountPerEligible,
+      },
+      T: {
+        totalLayerAmount: summ.layers.T.totalLayerAmount,
+        eligibleCount: summ.layers.T.eligibleCount,
+        amountPerEligible: summ.layers.T.amountPerEligible,
+      },
+      O: {
+        totalLayerAmount: summ.layers.O.totalLayerAmount,
+        eligibleCount: summ.layers.O.eligibleCount,
+        amountPerEligible: summ.layers.O.amountPerEligible,
+      },
+    });
+
+    const isSpecificLayer = fundingSource === 'E' || fundingSource === 'T' || fundingSource === 'O';
+    const layerBeforeAmount = isSpecificLayer
+      ? beforeSummary.layers[fundingSource].totalLayerAmount
+      : beforeSummary.totalPoolAmount;
+    const hasFundingOverflow = isSpecificLayer && targetPoolNeeded > layerBeforeAmount + 0.005;
+    const overflowAmount = hasFundingOverflow ? round2(targetPoolNeeded - layerBeforeAmount) : 0;
+
+    return {
+      groupSummary,
+      fundingSource,
+      beforeLayers: extractLayers(beforeSummary),
+      afterLayers: extractLayers(afterSummary),
+      hasFundingOverflow,
+      overflowAmount,
+      baseTotalPool: beforeSummary.totalPoolAmount,
+      afterTotalPool: afterSummary.totalPoolAmount,
+    };
+  }
+
+  /**
+   * Simula de forma pura o impacto Antes x Depois de um grupo dedicado diretamente sobre uma lista de candidatos
+   */
+  static previewDedicatedGroupImpactFromCandidates(
+    rawCandidates: BprCandidateResult[],
+    config: BprRuleConfig,
+    targetGroupId: string
+  ): BprDedicatedGroupImpactPreview {
+    const targetGroup = (config.dedicatedGroups || []).find(g => g.id === targetGroupId);
+    const beforeConfig: BprRuleConfig = {
+      ...config,
+      dedicatedGroups: (config.dedicatedGroups || []).filter(g => g.id !== targetGroupId),
+    };
+    const afterConfig: BprRuleConfig = {
+      ...config,
+      allowDedicatedGroups: true,
+      dedicatedGroups: (config.dedicatedGroups || []).map(g =>
+        g.id === targetGroupId ? { ...g, enabled: true } : g
+      ),
+    };
+    const beforeSummary = this.computeLayersAndAdditionalDistribution(rawCandidates, beforeConfig);
+    const afterSummary = this.computeLayersAndAdditionalDistribution(rawCandidates, afterConfig);
+    return this.buildImpactPreviewFromSummaries(beforeSummary, afterSummary, targetGroup, targetGroupId);
+  }
+
+  /**
+   * Simula de forma pura o impacto Antes x Depois de um grupo de montante específico sobre as camadas e colaboradores
+   */
+  static previewDedicatedGroupImpact(
+    employees: Employee[],
+    monthlyCosts: MonthlyCost[] = [],
+    config: BprRuleConfig,
+    targetGroupId: string
+  ): BprDedicatedGroupImpactPreview {
+    const targetGroup = (config.dedicatedGroups || []).find(g => g.id === targetGroupId);
+    const beforeConfig: BprRuleConfig = {
+      ...config,
+      dedicatedGroups: (config.dedicatedGroups || []).filter(g => g.id !== targetGroupId),
+    };
+    const afterConfig: BprRuleConfig = {
+      ...config,
+      allowDedicatedGroups: true,
+      dedicatedGroups: (config.dedicatedGroups || []).map(g =>
+        g.id === targetGroupId ? { ...g, enabled: true } : g
+      ),
+    };
+    const beforeSummary = this.calculateBpr(employees, monthlyCosts, beforeConfig);
+    const afterSummary = this.calculateBpr(employees, monthlyCosts, afterConfig);
+    return this.buildImpactPreviewFromSummaries(beforeSummary, afterSummary, targetGroup, targetGroupId);
   }
 
   /**

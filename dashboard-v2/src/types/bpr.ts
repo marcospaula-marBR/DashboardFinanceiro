@@ -10,20 +10,27 @@ export type BprDedicatedGroupDistributionMode = 'equal' | 'percentage' | 'amount
 
 export type BprDedicatedGroupFundingSource = 'total_pool' | BprCamada | 'extra_bonus';
 
+export type BprDedicatedGroupEligibilityPolicy = 'follow_bpr_rules' | 'include_all_as_exception';
+
 export interface BprDedicatedGroupMember {
   employeeId: string;
-  percentage?: number; // % individual sobre poolAmount quando distributionMode === 'percentage'
-  amount?: number;     // R$ absoluto individual quando distributionMode === 'amount'
+  percentage?: number;      // % individual sobre poolAmount quando distributionMode === 'percentage'
+  amount?: number;          // R$ absoluto individual quando distributionMode === 'amount'
+  customFactorPct?: number; // % de fator individual manual (0 a 100) dentro do grupo
 }
 
 export interface BprDedicatedGroup {
   id: string;
-  name: string;                                        // Ex: "Equipe Projeto X"
-  criteriaDescription?: string;                        // Critério / observação do grupo
-  enabled: boolean;                                    // Ativo ou pausado
-  poolAmount: number;                                  // Montante específico destinado ao grupo (R$)
-  distributionMode: BprDedicatedGroupDistributionMode; // 'equal' | 'percentage' | 'amount'
-  fundingSource: BprDedicatedGroupFundingSource;       // 'total_pool' | 'E' | 'T' | 'O' | 'extra_bonus'
+  name: string;                                          // Ex: "Equipe Projeto X"
+  criteriaDescription?: string;                          // Critério / observação do grupo
+  enabled: boolean;                                      // Ativo ou pausado
+  poolAmount: number;                                    // Montante específico destinado ao grupo (R$)
+  distributionMode: BprDedicatedGroupDistributionMode;   // 'equal' | 'percentage' | 'amount'
+  fundingSource: BprDedicatedGroupFundingSource;         // 'total_pool' | 'E' | 'T' | 'O' | 'extra_bonus'
+  eligibilityPolicy?: BprDedicatedGroupEligibilityPolicy; // 'follow_bpr_rules' | 'include_all_as_exception'
+  applyPerformanceFactor?: boolean;                      // Se true, aplica fator de desempenho do BPR
+  reducedFactorPct?: number;                             // % padrão aplicado quando meta 90%-99% (ex: 75)
+  redistributePerformanceResidual?: boolean;             // Se true, redistribui o saldo retido pelo fator entre elegíveis 100%
   members: BprDedicatedGroupMember[];
 }
 
@@ -36,7 +43,26 @@ export interface BprDedicatedGroupSummary {
   poolAmount: number;
   allocatedTotal: number;
   memberCount: number;
+  eligibleMemberCount?: number;
+  ineligibleMemberCount?: number;
+  amountPerEligible?: number;
+  eligibilityPolicy?: BprDedicatedGroupEligibilityPolicy;
+  applyPerformanceFactor?: boolean;
+  reducedFactorPct?: number;
+  redistributePerformanceResidual?: boolean;
+  redistributedAmount?: number;
   residualAmount: number;
+}
+
+export interface BprDedicatedGroupImpactPreview {
+  groupSummary: BprDedicatedGroupSummary | null;
+  fundingSource: BprDedicatedGroupFundingSource;
+  beforeLayers: Record<BprCamada, { totalLayerAmount: number; eligibleCount: number; amountPerEligible: number }>;
+  afterLayers: Record<BprCamada, { totalLayerAmount: number; eligibleCount: number; amountPerEligible: number }>;
+  hasFundingOverflow: boolean;
+  overflowAmount: number;
+  baseTotalPool: number;
+  afterTotalPool: number;
 }
 
 export interface BprTierSplit {
@@ -149,6 +175,8 @@ export interface BprCandidateResult {
   dedicatedGroupId?: string;
   dedicatedGroupName?: string;
   dedicatedGroupSharePct?: number;
+  dedicatedGroupEffectiveFactorPct?: number;
+  dedicatedGroupRedistributedBonus?: number;
 }
 
 export interface BprLayerRelativeWeight {

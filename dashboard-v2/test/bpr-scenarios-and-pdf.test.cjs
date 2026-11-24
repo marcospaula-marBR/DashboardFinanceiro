@@ -1433,4 +1433,202 @@ assert.strictEqual(aliceComp.delta, -18000);
 
 console.log('   ✅ BprPdfService real (comparativo dedicado de grupos, fallback snapshot e filtro por grupo no PDF) validado com 100% de precisão!');
 
+// 23. Testando Seleção Direta de Colaboradores p/ Grupo com Regras do BPR, Fator % Editável, Redistribuição e Impacto Antes x Depois
+console.log('\n23. Testando Regras BPR no Grupo, Campo Fator %, Redistribuição Interna e Prévia Antes x Depois...');
+
+const buildTechScenarioCandidates = (overrides = {}) => {
+  const base = [
+    { employeeId: 'e-dir', name: 'Dir Geral', camada: 'E', jobRole: 'Diretor', isEligible: true, isExceptionApplied: false, isManuallyExcluded: false, ineligibilityReasons: [], performanceFactor: 1.0 },
+    { employeeId: 't-ger', name: 'Gerente Ops', camada: 'T', jobRole: 'Gerente', isEligible: true, isExceptionApplied: false, isManuallyExcluded: false, ineligibilityReasons: [], performanceFactor: 1.0 },
+  ];
+  for (let i = 1; i <= 5; i += 1) {
+    const id = `tec-${i}`;
+    base.push({
+      employeeId: id,
+      name: `Técnico ${i}`,
+      camada: 'O',
+      jobRole: 'Técnico',
+      isEligible: true,
+      isExceptionApplied: false,
+      isManuallyExcluded: false,
+      ineligibilityReasons: [],
+      performanceFactor: 1.0,
+      ...(overrides[id] || {}),
+    });
+  }
+  for (let i = 1; i <= 10; i += 1) {
+    base.push({
+      employeeId: `op-${i}`,
+      name: `Auxiliar ${i}`,
+      camada: 'O',
+      jobRole: 'Auxiliar Operacional',
+      isEligible: true,
+      isExceptionApplied: false,
+      isManuallyExcluded: false,
+      ineligibilityReasons: [],
+      performanceFactor: 1.0,
+    });
+  }
+  return base;
+};
+
+// 23A. Caso exato do usuário: 15 elegíveis em O (R$ 30k), 5 Técnicos recebem R$ 5.000 retirados de O
+const candidates23A = buildTechScenarioCandidates();
+const cfg23A = {
+  ...RealBprService.getDefaultConfig('ciclo_1', 2026),
+  totalPoolAmount: 100000,
+  splitMode: 'percentage',
+  tierSplits: { E: 30, T: 40, O: 30 },
+  allowDedicatedGroups: true,
+  dedicatedGroups: [
+    {
+      id: 'g-tec',
+      name: 'Grupo Técnico',
+      criteriaDescription: 'Premiação R$ 5.000 destinada aos Técnicos a partir do Operacional',
+      enabled: true,
+      poolAmount: 5000,
+      distributionMode: 'equal',
+      fundingSource: 'O',
+      eligibilityPolicy: 'follow_bpr_rules',
+      applyPerformanceFactor: true,
+      reducedFactorPct: 75,
+      redistributePerformanceResidual: true,
+      members: [
+        { employeeId: 'tec-1' },
+        { employeeId: 'tec-2' },
+        { employeeId: 'tec-3' },
+        { employeeId: 'tec-4' },
+        { employeeId: 'tec-5' },
+      ],
+    },
+  ],
+};
+const res23A = RealBprService.recalculateSnapshotWithNewConfig(candidates23A, cfg23A);
+assert.strictEqual(res23A.layers.O.dedicatedGroupsDeductedFromLayer, 5000);
+assert.strictEqual(res23A.layers.O.totalLayerAmount, 25000);
+assert.strictEqual(res23A.layers.O.eligibleCount, 10);
+assert.strictEqual(res23A.layers.O.amountPerEligible, 2500);
+assert.strictEqual(res23A.dedicatedGroupSummaries[0].allocatedTotal, 5000);
+assert.strictEqual(res23A.dedicatedGroupSummaries[0].amountPerEligible, 1000);
+assert.strictEqual(res23A.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 1000);
+assert.strictEqual(res23A.candidates.find(c => c.employeeId === 'op-1').allocatedAmount, 2500);
+assert.strictEqual(res23A.totalDistributedAmount, 100000);
+assert.strictEqual(res23A.residualAmount, 0);
+
+// 23B. Técnico com meta 90%-99% (fator 75%) + redistribuição entre os demais membros elegíveis selecionados
+const candidates23B = buildTechScenarioCandidates({ 'tec-2': { performanceFactor: 0.75 } });
+const res23B = RealBprService.recalculateSnapshotWithNewConfig(candidates23B, cfg23A);
+const tec2_23B = res23B.candidates.find(c => c.employeeId === 'tec-2');
+const tec1_23B = res23B.candidates.find(c => c.employeeId === 'tec-1');
+assert.strictEqual(tec2_23B.dedicatedGroupEffectiveFactorPct, 75);
+assert.strictEqual(tec2_23B.allocatedAmount, 750);
+assert.strictEqual(tec2_23B.dedicatedGroupRedistributedBonus, 0);
+assert.strictEqual(tec1_23B.dedicatedGroupEffectiveFactorPct, 100);
+assert.strictEqual(tec1_23B.dedicatedGroupRedistributedBonus, 62.5);
+assert.strictEqual(tec1_23B.allocatedAmount, 1062.5);
+assert.strictEqual(res23B.dedicatedGroupSummaries[0].redistributedAmount, 250);
+assert.strictEqual(res23B.dedicatedGroupSummaries[0].allocatedTotal, 5000);
+assert.strictEqual(res23B.residualAmount, 0);
+
+// 23C. Campo editável de Fator % individual (customFactorPct) + reducedFactorPct customizado + todos < 100%
+const candidates23C = buildTechScenarioCandidates({ 'tec-2': { performanceFactor: 0.75 } });
+const cfg23C = {
+  ...cfg23A,
+  dedicatedGroups: [
+    {
+      ...cfg23A.dedicatedGroups[0],
+      reducedFactorPct: 80, // custom 80% para meta 90-99%
+      members: [
+        { employeeId: 'tec-1', customFactorPct: 50 }, // manual 50% -> 625 (retém 625)
+        { employeeId: 'tec-2' },                      // ciclo 80% -> 1000 (retém 250)
+        { employeeId: 'tec-3' },                      // 100% -> 1250 + 437.50 = 1687.50
+        { employeeId: 'tec-4' },                      // 100% -> 1250 + 437.50 = 1687.50
+      ],
+    },
+  ],
+};
+const res23C = RealBprService.recalculateSnapshotWithNewConfig(candidates23C, cfg23C);
+assert.strictEqual(res23C.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 625);
+assert.strictEqual(res23C.candidates.find(c => c.employeeId === 'tec-2').allocatedAmount, 1000);
+assert.strictEqual(res23C.candidates.find(c => c.employeeId === 'tec-3').allocatedAmount, 1687.5);
+assert.strictEqual(res23C.candidates.find(c => c.employeeId === 'tec-4').allocatedAmount, 1687.5);
+assert.strictEqual(res23C.dedicatedGroupSummaries[0].allocatedTotal, 5000);
+
+// Todos < 100%: fallback redistribui proporcionalmente entre os que têm afterFactor > 0
+const cfg23C_allReduced = {
+  ...cfg23A,
+  dedicatedGroups: [
+    {
+      ...cfg23A.dedicatedGroups[0],
+      members: [
+        { employeeId: 'tec-1', customFactorPct: 80 },
+        { employeeId: 'tec-2', customFactorPct: 80 },
+        { employeeId: 'tec-3', customFactorPct: 40 },
+        { employeeId: 'tec-4', customFactorPct: 40 },
+      ],
+    },
+  ],
+};
+const res23C_allRed = RealBprService.recalculateSnapshotWithNewConfig(candidates23A, cfg23C_allReduced);
+assert.strictEqual(res23C_allRed.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 1666.67);
+assert.strictEqual(res23C_allRed.candidates.find(c => c.employeeId === 'tec-3').allocatedAmount, 833.33);
+assert.strictEqual(res23C_allRed.dedicatedGroupSummaries[0].allocatedTotal, 5000);
+
+// 23D. Elegibilidade follow_bpr_rules: 1 membro inelegível no grupo recebe R$ 0 e não entra no divisor
+const candidates23D = buildTechScenarioCandidates({
+  'tec-5': { isEligible: false, ineligibilityReasons: ['Glosa no período'] },
+});
+const res23D = RealBprService.recalculateSnapshotWithNewConfig(candidates23D, cfg23A);
+const tec5_23D = res23D.candidates.find(c => c.employeeId === 'tec-5');
+assert.strictEqual(tec5_23D.isEligible, false);
+assert.strictEqual(tec5_23D.dedicatedGroupId, 'g-tec');
+assert.strictEqual(tec5_23D.allocatedAmount, 0);
+assert.strictEqual(res23D.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 1250);
+assert.strictEqual(res23D.dedicatedGroupSummaries[0].eligibleMemberCount, 4);
+assert.strictEqual(res23D.dedicatedGroupSummaries[0].ineligibleMemberCount, 1);
+assert.strictEqual(res23D.totalIneligible, 1);
+assert.strictEqual(res23D.totalEligible + res23D.totalIneligible, res23D.totalCandidates);
+
+// 23E. Sem redistribuição (redistributePerformanceResidual: false) + todos inelegíveis no grupo (zero NaN)
+const cfg23E_noRedist = {
+  ...cfg23A,
+  dedicatedGroups: [{ ...cfg23A.dedicatedGroups[0], redistributePerformanceResidual: false }],
+};
+const res23E_noRedist = RealBprService.recalculateSnapshotWithNewConfig(candidates23B, cfg23E_noRedist);
+assert.strictEqual(res23E_noRedist.candidates.find(c => c.employeeId === 'tec-2').allocatedAmount, 750);
+assert.strictEqual(res23E_noRedist.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 1000);
+assert.strictEqual(res23E_noRedist.dedicatedGroupSummaries[0].residualAmount, 250);
+assert.strictEqual(res23E_noRedist.residualAmount, 250);
+
+const cfg23E_allInel = {
+  ...cfg23A,
+  dedicatedGroups: [{ ...cfg23A.dedicatedGroups[0], members: [{ employeeId: 'tec-5' }] }],
+};
+const res23E_allInel = RealBprService.recalculateSnapshotWithNewConfig(candidates23D, cfg23E_allInel);
+assert.strictEqual(res23E_allInel.dedicatedGroupSummaries[0].eligibleMemberCount, 0);
+assert.strictEqual(res23E_allInel.dedicatedGroupSummaries[0].ineligibleMemberCount, 1);
+assert.strictEqual(res23E_allInel.dedicatedGroupSummaries[0].allocatedTotal, 0);
+assert.strictEqual(res23E_allInel.dedicatedGroupSummaries[0].residualAmount, 5000);
+assert.strictEqual(Number.isNaN(res23E_allInel.totalDistributedAmount), false);
+
+// 23F. Prévia Antes x Depois (previewDedicatedGroupImpactFromCandidates) + alerta de overflow
+const preview23F = RealBprService.previewDedicatedGroupImpactFromCandidates(candidates23A, cfg23A, 'g-tec');
+assert.strictEqual(preview23F.beforeLayers.O.totalLayerAmount, 30000);
+assert.strictEqual(preview23F.beforeLayers.O.eligibleCount, 15);
+assert.strictEqual(preview23F.beforeLayers.O.amountPerEligible, 2000);
+assert.strictEqual(preview23F.afterLayers.O.totalLayerAmount, 25000);
+assert.strictEqual(preview23F.afterLayers.O.eligibleCount, 10);
+assert.strictEqual(preview23F.afterLayers.O.amountPerEligible, 2500);
+assert.strictEqual(preview23F.hasFundingOverflow, false);
+
+const cfg23F_overflow = {
+  ...cfg23A,
+  dedicatedGroups: [{ ...cfg23A.dedicatedGroups[0], poolAmount: 40000 }],
+};
+const previewOverflow = RealBprService.previewDedicatedGroupImpactFromCandidates(candidates23A, cfg23F_overflow, 'g-tec');
+assert.strictEqual(previewOverflow.hasFundingOverflow, true);
+assert.strictEqual(previewOverflow.overflowAmount, 10000);
+
+console.log('   ✅ Regras BPR no grupo, fator % editável, redistribuição interna e prévia Antes x Depois validados com 100% de precisão!');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

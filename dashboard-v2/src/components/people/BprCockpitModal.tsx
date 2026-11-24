@@ -10,7 +10,9 @@ import {
   BprAdditionalDeductionSource,
   BprDedicatedGroup,
   BprDedicatedGroupDistributionMode,
+  BprDedicatedGroupEligibilityPolicy,
   BprDedicatedGroupFundingSource,
+  BprDedicatedGroupImpactPreview,
   BprCalculationSummary,
   BprSavedScenario,
   BprSavedRun 
@@ -47,8 +49,11 @@ export function BprCockpitModal({
   // Modos de Visualização e Filtros da Tabela - SEMPRE FOCAR EM ELEGÍVEIS LOGO AO ABRIR
   const [statusFilter, setStatusFilter] = useState<'all' | 'eligible' | 'ineligible'>('eligible');
   const [camadaFilter, setCamadaFilter] = useState<'all' | BprCamada | 'dedicated'>('all');
+  const [jobRoleFilter, setJobRoleFilter] = useState<string>('');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmployeeIdFilter, setSelectedEmployeeIdFilter] = useState<string>('');
+  const [selectedIdsForNewGroup, setSelectedIdsForNewGroup] = useState<string[]>([]);
 
   // Simulador de Meta por Múltiplo Salarial por Camada (x)
   const [isTargetMultiplePanelOpen, setIsTargetMultiplePanelOpen] = useState(false);
@@ -59,6 +64,9 @@ export function BprCockpitModal({
   const [isInativosModalOpen, setIsInativosModalOpen] = useState(false);
   const [isDedicatedGroupsModalOpen, setIsDedicatedGroupsModalOpen] = useState(false);
   const [dedicatedMemberSearchByGroup, setDedicatedMemberSearchByGroup] = useState<Record<string, string>>({});
+  const [dedicatedRoleFilterByGroup, setDedicatedRoleFilterByGroup] = useState<Record<string, string>>({});
+  const [dedicatedCamadaFilterByGroup, setDedicatedCamadaFilterByGroup] = useState<Record<string, string>>({});
+  const [activeEditingGroupId, setActiveEditingGroupId] = useState<string | null>(null);
   const [isDocImportModalOpen, setIsDocImportModalOpen] = useState(false);
   const [docImportText, setDocImportText] = useState('');
   const [importedPatch, setImportedPatch] = useState<Partial<BprRuleConfig> | null>(null);
@@ -231,9 +239,13 @@ export function BprCockpitModal({
       name: `Grupo Específico ${nextIdx}`,
       criteriaDescription: '',
       enabled: true,
-      poolAmount: 10000,
+      poolAmount: 5000,
       distributionMode: 'equal',
       fundingSource: 'total_pool',
+      eligibilityPolicy: 'follow_bpr_rules',
+      applyPerformanceFactor: true,
+      reducedFactorPct: 75,
+      redistributePerformanceResidual: true,
       members: [],
     };
     setConfig(prev => ({
@@ -241,6 +253,7 @@ export function BprCockpitModal({
       allowDedicatedGroups: true,
       dedicatedGroups: [...(prev.dedicatedGroups || []), newGroup],
     }));
+    setActiveEditingGroupId(newGroup.id);
   };
 
   const handleUpdateDedicatedGroup = (groupId: string, patch: Partial<BprDedicatedGroup>) => {
@@ -267,6 +280,9 @@ export function BprCockpitModal({
       ...prev,
       dedicatedGroups: (prev.dedicatedGroups || []).filter(g => g.id !== groupId),
     }));
+    if (activeEditingGroupId === groupId) {
+      setActiveEditingGroupId(null);
+    }
   };
 
   const handleToggleDedicatedGroupMember = (groupId: string, employeeId: string) => {
@@ -278,6 +294,34 @@ export function BprCockpitModal({
         const nextMembers = exists
           ? g.members.filter(m => m.employeeId !== employeeId)
           : [...g.members, { employeeId, percentage: 0, amount: 0 }];
+        const nextPool = g.distributionMode === 'amount'
+          ? Number(nextMembers.reduce((acc, m) => acc + Math.max(0, Number(m.amount || 0)), 0).toFixed(2))
+          : g.poolAmount;
+        return { ...g, members: nextMembers, poolAmount: nextPool };
+      }),
+    }));
+  };
+
+  const handleBatchSelectDedicatedMembers = (
+    groupId: string,
+    candidateIds: string[],
+    mode: 'add' | 'remove'
+  ) => {
+    const targetSet = new Set(candidateIds);
+    setConfig(prev => ({
+      ...prev,
+      dedicatedGroups: (prev.dedicatedGroups || []).map(g => {
+        if (g.id !== groupId) return g;
+        let nextMembers = g.members;
+        if (mode === 'add') {
+          const existingSet = new Set(g.members.map(m => m.employeeId));
+          const toAppend = candidateIds
+            .filter(id => !existingSet.has(id))
+            .map(id => ({ employeeId: id, percentage: 0, amount: 0 }));
+          nextMembers = [...g.members, ...toAppend];
+        } else {
+          nextMembers = g.members.filter(m => !targetSet.has(m.employeeId));
+        }
         const nextPool = g.distributionMode === 'amount'
           ? Number(nextMembers.reduce((acc, m) => acc + Math.max(0, Number(m.amount || 0)), 0).toFixed(2))
           : g.poolAmount;
@@ -305,6 +349,28 @@ export function BprCockpitModal({
           ? Number(nextMembers.reduce((acc, m) => acc + Math.max(0, Number(m.amount || 0)), 0).toFixed(2))
           : g.poolAmount;
         return { ...g, members: nextMembers, poolAmount: nextPool };
+      }),
+    }));
+  };
+
+  const handleUpdateDedicatedMemberFactor = (
+    groupId: string,
+    employeeId: string,
+    rawVal: string
+  ) => {
+    const trimmed = rawVal.trim();
+    const parsed = parseFloat(trimmed);
+    const nextFactor = trimmed === '' || isNaN(parsed)
+      ? undefined
+      : Math.min(100, Math.max(0, Number(parsed.toFixed(1))));
+    setConfig(prev => ({
+      ...prev,
+      dedicatedGroups: (prev.dedicatedGroups || []).map(g => {
+        if (g.id !== groupId) return g;
+        const nextMembers = g.members.map(m =>
+          m.employeeId === employeeId ? { ...m, customFactorPct: nextFactor } : m
+        );
+        return { ...g, members: nextMembers };
       }),
     }));
   };
@@ -425,6 +491,23 @@ export function BprCockpitModal({
     }));
   };
 
+  // Listas de Cargos e Departamentos disponíveis para filtro rápido na grade
+  const availableJobRoles = useMemo(() => {
+    const set = new Set<string>();
+    summary.candidates.forEach(c => {
+      if (c.jobRole && c.jobRole.trim()) set.add(c.jobRole.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [summary.candidates]);
+
+  const availableDepartments = useMemo(() => {
+    const set = new Set<string>();
+    summary.candidates.forEach(c => {
+      if (c.department && c.department.trim()) set.add(c.department.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [summary.candidates]);
+
   // Lista alfabética de nomes disponíveis para o dropdown "Filtrar por Nome"
   const availableCandidateNames = useMemo(() => {
     return summary.candidates
@@ -433,6 +516,8 @@ export function BprCockpitModal({
         if (statusFilter === 'ineligible' && c.isEligible) return false;
         if (camadaFilter === 'dedicated' && !c.dedicatedGroupId) return false;
         if (camadaFilter !== 'all' && camadaFilter !== 'dedicated' && c.camada !== camadaFilter) return false;
+        if (jobRoleFilter && c.jobRole !== jobRoleFilter) return false;
+        if (departmentFilter && c.department !== departmentFilter) return false;
         return true;
       })
       .map(c => {
@@ -442,7 +527,7 @@ export function BprCockpitModal({
         return { id: c.employeeId, label: `${primary}${resp}` };
       })
       .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-  }, [summary.candidates, statusFilter, camadaFilter]);
+  }, [summary.candidates, statusFilter, camadaFilter, jobRoleFilter, departmentFilter]);
 
   // Filtragem da Lista para Exibição
   const displayedCandidates = useMemo(() => {
@@ -452,6 +537,8 @@ export function BprCockpitModal({
       if (statusFilter === 'ineligible' && c.isEligible) return false;
       if (camadaFilter === 'dedicated' && !c.dedicatedGroupId) return false;
       if (camadaFilter !== 'all' && camadaFilter !== 'dedicated' && c.camada !== camadaFilter) return false;
+      if (jobRoleFilter && c.jobRole !== jobRoleFilter) return false;
+      if (departmentFilter && c.department !== departmentFilter) return false;
       if (selectedEmployeeIdFilter && c.employeeId !== selectedEmployeeIdFilter) return false;
 
       if (q) {
@@ -463,7 +550,111 @@ export function BprCockpitModal({
 
       return true;
     });
-  }, [summary.candidates, statusFilter, camadaFilter, selectedEmployeeIdFilter, searchQuery]);
+  }, [summary.candidates, statusFilter, camadaFilter, jobRoleFilter, departmentFilter, selectedEmployeeIdFilter, searchQuery]);
+
+  // Seleção direta na Grade Principal para criar Grupo / Cenário de Montante Específico
+  const selectableDisplayedIds = useMemo(() => {
+    const excludedSet = new Set(config.manuallyExcludedEmployeeIds || []);
+    return displayedCandidates
+      .filter(c => !excludedSet.has(c.employeeId) && !c.dedicatedGroupId)
+      .map(c => c.employeeId);
+  }, [displayedCandidates, config.manuallyExcludedEmployeeIds]);
+
+  const selectedCandidatesSummary = useMemo(() => {
+    const selectedSet = new Set(selectedIdsForNewGroup);
+    const chosen = summary.candidates.filter(c => selectedSet.has(c.employeeId) && !c.dedicatedGroupId);
+    const counts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
+    let eligibleInSelection = 0;
+    chosen.forEach(c => {
+      counts[c.camada] = (counts[c.camada] || 0) + 1;
+      if (c.isEligible) eligibleInSelection += 1;
+    });
+    const sorted = (['O', 'T', 'E'] as BprCamada[]).sort((a, b) => counts[b] - counts[a]);
+    const predominantCamada: BprCamada = counts[sorted[0]] > 0 ? sorted[0] : 'O';
+    return { chosen, count: chosen.length, eligibleInSelection, predominantCamada };
+  }, [selectedIdsForNewGroup, summary.candidates]);
+
+  const handleToggleSelectForNewGroup = (employeeId: string) => {
+    setSelectedIdsForNewGroup(prev =>
+      prev.includes(employeeId) ? prev.filter(id => id !== employeeId) : [...prev, employeeId]
+    );
+  };
+
+  const handleToggleSelectAllVisibleForNewGroup = () => {
+    const allVisibleSelected =
+      selectableDisplayedIds.length > 0 &&
+      selectableDisplayedIds.every(id => selectedIdsForNewGroup.includes(id));
+    if (allVisibleSelected) {
+      const visibleSet = new Set(selectableDisplayedIds);
+      setSelectedIdsForNewGroup(prev => prev.filter(id => !visibleSet.has(id)));
+    } else {
+      setSelectedIdsForNewGroup(prev => Array.from(new Set([...prev, ...selectableDisplayedIds])));
+    }
+  };
+
+  const handleCreateDedicatedGroupFromSelection = () => {
+    const chosen = selectedCandidatesSummary.chosen;
+    if (chosen.length === 0) return;
+
+    const nextIdx = (config.dedicatedGroups || []).length + 1;
+    const uniqueRoles = Array.from(new Set(chosen.map(c => (c.jobRole || '').trim()).filter(Boolean)));
+    const qClean = searchQuery.trim();
+    let suggestedName = `Grupo Específico ${nextIdx}`;
+    if (jobRoleFilter) {
+      suggestedName = `Grupo ${jobRoleFilter}`;
+    } else if (departmentFilter) {
+      suggestedName = `Grupo ${departmentFilter}`;
+    } else if (qClean.length >= 3 && qClean.length <= 30) {
+      suggestedName = `Grupo ${qClean}`;
+    } else if (uniqueRoles.length === 1) {
+      suggestedName = `Grupo ${uniqueRoles[0]}`;
+    }
+
+    const newGroup: BprDedicatedGroup = {
+      id: `bpr-grp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: suggestedName.slice(0, 80),
+      criteriaDescription: '',
+      enabled: true,
+      poolAmount: 5000,
+      distributionMode: 'equal',
+      fundingSource: selectedCandidatesSummary.predominantCamada,
+      eligibilityPolicy: 'follow_bpr_rules',
+      applyPerformanceFactor: true,
+      reducedFactorPct: 75,
+      redistributePerformanceResidual: true,
+      members: chosen.map(c => ({ employeeId: c.employeeId, percentage: 0, amount: 0 })),
+    };
+
+    setConfig(prev => ({
+      ...prev,
+      allowDedicatedGroups: true,
+      dedicatedGroups: [...(prev.dedicatedGroups || []), newGroup],
+    }));
+    setSelectedIdsForNewGroup([]);
+    setActiveEditingGroupId(newGroup.id);
+    setIsDedicatedGroupsModalOpen(true);
+  };
+
+  // Prévia Antes x Depois de cada grupo no Modal de Grupos Específicos
+  const groupImpactPreviewMap = useMemo(() => {
+    const map = new Map<string, BprDedicatedGroupImpactPreview>();
+    if (!isDedicatedGroupsModalOpen) return map;
+    (config.dedicatedGroups || []).forEach(g => {
+      map.set(g.id, BprService.previewDedicatedGroupImpact(employees, monthlyCosts, config, g.id));
+    });
+    return map;
+  }, [isDedicatedGroupsModalOpen, employees, monthlyCosts, config]);
+
+  const handleApplyGroupsAndSaveScenario = () => {
+    setIsDedicatedGroupsModalOpen(false);
+    const activeNames = (summary.dedicatedGroupSummaries || []).map(g => g.name).filter(Boolean);
+    const cycleLabel = config.cycle === 'ciclo_1' ? '1º Sem' : config.cycle === 'ciclo_2' ? '2º Sem' : 'Estudo';
+    const suffix = activeNames.length > 0 ? ` — ${activeNames.slice(0, 2).join(' + ')}` : '';
+    setScenarioNameInput(`Cenário BPR ${cycleLabel} ${config.year}${suffix}`);
+    setStudyDateInput(new Date().toISOString().slice(0, 10));
+    setCriteriaDescriptionInput(generateCurrentCriteriaSummary());
+    setIsSaveScenarioModalOpen(true);
+  };
 
   // Resumo Dinâmico dos Critérios Ativos
   const generateCurrentCriteriaSummary = () => {
@@ -1953,8 +2144,8 @@ export function BprCockpitModal({
                             ...prev,
                             allowDedicatedGroups: newVal
                           }));
-                          if (newVal && dedicatedGroups.length === 0) {
-                            setIsDedicatedGroupsModalOpen(true);
+                          if (!newVal) {
+                            setSelectedIdsForNewGroup([]);
                           }
                         }}
                         className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
@@ -2009,7 +2200,7 @@ export function BprCockpitModal({
                                 {gs.name}
                               </strong>
                               <span className="text-[11px] text-teal-700 font-semibold block truncate">
-                                {gs.memberCount} pessoa(s) · {formatDedicatedModeLabel(gs.distributionMode)} · {formatDedicatedFundingLabel(gs.fundingSource)}
+                                {gs.memberCount} eleg.{gs.ineligibleMemberCount ? ` (+${gs.ineligibleMemberCount} inel.)` : ''} · {formatDedicatedModeLabel(gs.distributionMode)} · {formatDedicatedFundingLabel(gs.fundingSource)}
                               </span>
                             </div>
                             <div className="text-right shrink-0 font-mono">
@@ -2026,8 +2217,8 @@ export function BprCockpitModal({
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-500">
-                        Nenhum grupo ativo com colaboradores selecionados. Clique em <strong>Gerenciar Grupos</strong> para criar um grupo e definir o montante específico, a origem do recurso e o critério de rateio.
+                      <p className="text-xs text-slate-600">
+                        Modo seleção ativo: marque os colaboradores diretamente na grade abaixo (ex.: filtre por Cargo &quot;Técnico&quot;) ou clique em <strong>Gerenciar Grupos</strong> para montar um grupo e destinar um montante específico.
                       </p>
                     )}
                   </div>
@@ -2037,107 +2228,143 @@ export function BprCockpitModal({
           </div>
 
           {/* 3. BARRA DE FILTROS & BUSCA DA GRADE */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-              <button
-                type="button"
-                onClick={() => setStatusFilter('all')}
-                className={`px-4 py-2 rounded-lg text-sm font-black transition-all cursor-pointer ${
-                  statusFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Todos ({summary.totalCandidates})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('eligible')}
-                className={`px-4 py-2 rounded-lg text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  statusFilter === 'eligible' ? 'bg-emerald-600 text-white' : 'text-emerald-600 hover:text-emerald-700'
-                }`}
-              >
-                <CheckCircle2 size={14} />
-                <span>Elegíveis ({summary.totalEligible})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('ineligible')}
-                className={`px-4 py-2 rounded-lg text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  statusFilter === 'ineligible' ? 'bg-rose-600 text-white' : 'text-rose-500 hover:text-rose-700'
-                }`}
-              >
-                <AlertTriangle size={14} />
-                <span>Inelegíveis / Excluídos ({summary.totalIneligible})</span>
-              </button>
-            </div>
-
-            {/* Filtro por Camada */}
-            <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-bold text-slate-400 uppercase px-2">Camada:</span>
-              <button
-                type="button"
-                onClick={() => setCamadaFilter('all')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer ${
-                  camadaFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Todas
-              </button>
-              <button
-                type="button"
-                onClick={() => setCamadaFilter('E')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer ${
-                  camadaFilter === 'E' ? 'bg-blue-600 text-white' : 'text-blue-600 hover:text-blue-700'
-                }`}
-              >
-                Estratégico
-              </button>
-              <button
-                type="button"
-                onClick={() => setCamadaFilter('T')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer ${
-                  camadaFilter === 'T' ? 'bg-indigo-600 text-white' : 'text-indigo-600 hover:text-indigo-700'
-                }`}
-              >
-                Tático
-              </button>
-              <button
-                type="button"
-                onClick={() => setCamadaFilter('O')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer ${
-                  camadaFilter === 'O' ? 'bg-emerald-600 text-white' : 'text-emerald-600 hover:text-emerald-700'
-                }`}
-              >
-                Operacional/CLTs
-              </button>
-              {(summary.dedicatedMembersCount || 0) > 0 && (
+          <div className="space-y-3 pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
                 <button
                   type="button"
-                  onClick={() => setCamadaFilter('dedicated')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer ${
-                    camadaFilter === 'dedicated' ? 'bg-teal-600 text-white' : 'text-teal-700 hover:text-teal-800'
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3.5 py-2 rounded-lg text-xs sm:text-sm font-black transition-all cursor-pointer ${
+                    statusFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  Grupos ({summary.dedicatedMembersCount})
+                  Todos ({summary.totalCandidates})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('eligible')}
+                  className={`px-3.5 py-2 rounded-lg text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                    statusFilter === 'eligible' ? 'bg-emerald-600 text-white' : 'text-emerald-600 hover:text-emerald-700'
+                  }`}
+                >
+                  <CheckCircle2 size={14} />
+                  <span>Elegíveis ({summary.totalEligible})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('ineligible')}
+                  className={`px-3.5 py-2 rounded-lg text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                    statusFilter === 'ineligible' ? 'bg-rose-600 text-white' : 'text-rose-500 hover:text-rose-700'
+                  }`}
+                >
+                  <AlertTriangle size={14} />
+                  <span>Inelegíveis / Excluídos ({summary.totalIneligible})</span>
+                </button>
+              </div>
+
+              {/* Filtro por Camada */}
+              <div className="flex flex-wrap items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                <span className="text-xs font-bold text-slate-400 uppercase px-2">Camada:</span>
+                <button
+                  type="button"
+                  onClick={() => setCamadaFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    camadaFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Todas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCamadaFilter('E')}
+                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    camadaFilter === 'E' ? 'bg-blue-600 text-white' : 'text-blue-600 hover:text-blue-700'
+                  }`}
+                >
+                  Estratégico
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCamadaFilter('T')}
+                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    camadaFilter === 'T' ? 'bg-indigo-600 text-white' : 'text-indigo-600 hover:text-indigo-700'
+                  }`}
+                >
+                  Tático
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCamadaFilter('O')}
+                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    camadaFilter === 'O' ? 'bg-emerald-600 text-white' : 'text-emerald-600 hover:text-emerald-700'
+                  }`}
+                >
+                  Operacional/CLTs
+                </button>
+                {(summary.dedicatedMembersCount || 0) > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setCamadaFilter('dedicated')}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                      camadaFilter === 'dedicated' ? 'bg-teal-600 text-white' : 'text-teal-700 hover:text-teal-800'
+                    }`}
+                  >
+                    Grupos ({summary.dedicatedMembersCount})
+                  </button>
+                )}
+              </div>
+
+              {/* Contador / Restauração de Excluídos */}
+              {(config.manuallyExcludedEmployeeIds || []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setConfig(prev => ({ ...prev, manuallyExcludedEmployeeIds: [] }))}
+                  className="text-sm font-black text-amber-700 bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl hover:bg-amber-100 transition-all cursor-pointer flex items-center gap-1.5"
+                  title="Clique para restaurar todos os contratados excluídos manualmente"
+                >
+                  <span>Restaurar {config.manuallyExcludedEmployeeIds.length} excluído(s)</span>
                 </button>
               )}
             </div>
 
-            {/* Contador / Restauração de Excluídos */}
-            {(config.manuallyExcludedEmployeeIds || []).length > 0 && (
-              <button
-                type="button"
-                onClick={() => setConfig(prev => ({ ...prev, manuallyExcludedEmployeeIds: [] }))}
-                className="text-sm font-black text-amber-700 bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl hover:bg-amber-100 transition-all cursor-pointer flex items-center gap-1.5"
-                title="Clique para restaurar todos os contratados excluídos manualmente"
-              >
-                <span>Restaurar {config.manuallyExcludedEmployeeIds.length} excluído(s)</span>
-              </button>
-            )}
+            {/* Segunda Linha de Filtros: Cargo, Departamento, Nome, Busca Textual e Ação Rápida p/ Grupo */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Filtro por Cargo */}
+              <div className="min-w-[160px] flex-1 sm:flex-initial sm:w-48">
+                <select
+                  aria-label="Filtrar por cargo do colaborador"
+                  value={jobRoleFilter}
+                  onChange={e => setJobRoleFilter(e.target.value)}
+                  className="w-full min-h-[40px] bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 shadow-sm cursor-pointer"
+                >
+                  <option value="">Todos os Cargos ({availableJobRoles.length})</option>
+                  {availableJobRoles.map(role => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Filtro Direto por Nome + Busca Rápida */}
-            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px] justify-end">
+              {/* Filtro por Departamento */}
+              <div className="min-w-[160px] flex-1 sm:flex-initial sm:w-44">
+                <select
+                  aria-label="Filtrar por departamento"
+                  value={departmentFilter}
+                  onChange={e => setDepartmentFilter(e.target.value)}
+                  className="w-full min-h-[40px] bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 shadow-sm cursor-pointer"
+                >
+                  <option value="">Todos os Deptos ({availableDepartments.length})</option>
+                  {availableDepartments.map(dep => (
+                    <option key={dep} value={dep}>
+                      {dep}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Dropdown Alfabético: Filtrar por Nome */}
-              <div className="flex items-center gap-1 min-w-[200px] max-w-xs flex-1 sm:flex-initial">
+              <div className="flex items-center gap-1 min-w-[190px] flex-1 sm:flex-initial sm:w-56">
                 <select
                   aria-label="Filtrar por nome do colaborador"
                   value={selectedEmployeeIdFilter}
@@ -2155,7 +2382,7 @@ export function BprCockpitModal({
                   <button
                     type="button"
                     onClick={() => setSelectedEmployeeIdFilter('')}
-                    className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 cursor-pointer shrink-0"
+                    className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 cursor-pointer shrink-0"
                     title="Limpar filtro por nome selecionado"
                   >
                     <X size={14} />
@@ -2164,7 +2391,7 @@ export function BprCockpitModal({
               </div>
 
               {/* Busca Textual por Nome / Razão Social / Responsável / Cargo */}
-              <div className="relative flex-1 min-w-[220px] max-w-sm">
+              <div className="relative flex-1 min-w-[210px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
@@ -2184,7 +2411,72 @@ export function BprCockpitModal({
                   </button>
                 )}
               </div>
+
+              {/* Atalho para habilitar Seleção Direta na Grade */}
+              {!config.allowDedicatedGroups ? (
+                <button
+                  type="button"
+                  onClick={() => setConfig(prev => ({ ...prev, allowDedicatedGroups: true }))}
+                  className="min-h-[40px] px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs sm:text-sm font-black shadow-sm transition-all cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95"
+                  title="Ativar caixas de seleção na grade para destinar montante específico a um grupo de colaboradores"
+                >
+                  <Users size={15} />
+                  <span>Selecionar p/ Grupo</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleToggleSelectAllVisibleForNewGroup}
+                  disabled={selectableDisplayedIds.length === 0}
+                  className="min-h-[40px] px-3.5 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 disabled:opacity-40 text-teal-800 border border-teal-300 text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                  title="Marcar ou desmarcar todos os colaboradores filtrados visíveis para criar um grupo"
+                >
+                  <Check size={14} />
+                  <span>
+                    {selectableDisplayedIds.length > 0 && selectableDisplayedIds.every(id => selectedIdsForNewGroup.includes(id))
+                      ? `Desmarcar visíveis (${selectableDisplayedIds.length})`
+                      : `Marcar visíveis (${selectableDisplayedIds.length})`}
+                  </span>
+                </button>
+              )}
             </div>
+
+            {/* Barra Contextual de Seleção Direta na Grade */}
+            {config.allowDedicatedGroups && selectedCandidatesSummary.count > 0 && (
+              <div className="bg-teal-50 border-2 border-teal-300 rounded-2xl p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3 shadow-sm animate-in fade-in">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0">
+                    <Users size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <strong className="text-sm font-black text-teal-950 block">
+                      {selectedCandidatesSummary.count} colaborador(es) selecionado(s) na grade
+                    </strong>
+                    <span className="text-xs font-semibold text-teal-800 block">
+                      {selectedCandidatesSummary.eligibleInSelection} elegível(is) no ciclo · Origem sugerida: Camada {selectedCandidatesSummary.predominantCamada}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIdsForNewGroup([])}
+                    className="min-h-[44px] px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold cursor-pointer"
+                  >
+                    Limpar Seleção
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateDedicatedGroupFromSelection}
+                    className="min-h-[44px] px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs sm:text-sm font-black uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+                  >
+                    <Plus size={16} />
+                    <span>Destinar Montante &amp; Criar Grupo</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 4. GRADE ANALÍTICA DE CONTRATADOS */}
@@ -2192,6 +2484,21 @@ export function BprCockpitModal({
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-black uppercase tracking-wider text-slate-500">
+                  {config.allowDedicatedGroups && (
+                    <th className="py-3.5 px-3 text-center w-12">
+                      <input
+                        type="checkbox"
+                        aria-label="Selecionar todos visíveis para grupo de montante específico"
+                        disabled={selectableDisplayedIds.length === 0}
+                        checked={
+                          selectableDisplayedIds.length > 0 &&
+                          selectableDisplayedIds.every(id => selectedIdsForNewGroup.includes(id))
+                        }
+                        onChange={handleToggleSelectAllVisibleForNewGroup}
+                        className="w-4 h-4 rounded text-teal-600 border-slate-300 cursor-pointer"
+                      />
+                    </th>
+                  )}
                   <th className="py-3.5 px-5">Contratado</th>
                   <th className="py-3.5 px-4">Empresa / Regime</th>
                   <th className="py-3.5 px-4">Camada</th>
@@ -2208,7 +2515,7 @@ export function BprCockpitModal({
               <tbody className="divide-y divide-slate-100">
                 {displayedCandidates.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-16 text-center text-slate-400 font-bold text-base">
+                    <td colSpan={config.allowDedicatedGroups ? 12 : 11} className="py-16 text-center text-slate-400 font-bold text-base">
                       Nenhum contratado encontrado com os filtros selecionados.
                     </td>
                   </tr>
@@ -2218,6 +2525,8 @@ export function BprCockpitModal({
                     const displayName = isPJ ? (c.corporateName || c.name) : c.name;
                     const respName = isPJ ? (c.responsibleName || c.name) : undefined;
                     const isExcluded = (config.manuallyExcludedEmployeeIds || []).includes(c.employeeId);
+                    const isCheckedForGroup = selectedIdsForNewGroup.includes(c.employeeId);
+                    const isSelectDisabled = isExcluded || Boolean(c.dedicatedGroupId);
                     const camadaBadgeColor = c.camada === 'E' 
                       ? 'bg-blue-50 text-blue-700 border-blue-200' 
                       : c.camada === 'T' 
@@ -2226,8 +2535,27 @@ export function BprCockpitModal({
 
                     return (
                       <tr key={c.employeeId} className={`transition-colors ${
-                        isExcluded ? 'bg-rose-50/60 opacity-70' : 'hover:bg-slate-50'
+                        isExcluded ? 'bg-rose-50/60 opacity-70' : isCheckedForGroup ? 'bg-teal-50/60' : 'hover:bg-slate-50'
                       }`}>
+                        {config.allowDedicatedGroups && (
+                          <td className="py-3.5 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              aria-label={`Selecionar ${displayName} para grupo de montante específico`}
+                              disabled={isSelectDisabled}
+                              checked={isCheckedForGroup}
+                              onChange={() => handleToggleSelectForNewGroup(c.employeeId)}
+                              title={
+                                c.dedicatedGroupId
+                                  ? `Já alocado em: ${c.dedicatedGroupName}`
+                                  : isExcluded
+                                    ? 'Colaborador excluído manualmente'
+                                    : 'Selecionar para criar grupo de montante específico'
+                              }
+                              className="w-4 h-4 rounded text-teal-600 border-slate-300 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            />
+                          </td>
+                        )}
                         {/* Colaborador */}
                         <td className="py-3.5 px-5">
                           <div className="flex items-center gap-3">
@@ -2266,7 +2594,9 @@ export function BprCockpitModal({
                                 <span className="truncate max-w-[150px]">{c.dedicatedGroupName}</span>
                               </span>
                               <span className="text-[10px] font-bold text-slate-400 block">
-                                Origem: {c.camada} · {formatPctPtBr(c.dedicatedGroupSharePct)} do grupo
+                                {c.isEligible
+                                  ? `Origem: ${c.camada} · ${formatPctPtBr(c.dedicatedGroupSharePct)} do grupo`
+                                  : `Origem: ${c.camada} · Inelegível na regra BPR`}
                               </span>
                             </div>
                           ) : (
@@ -2346,9 +2676,21 @@ export function BprCockpitModal({
                               {c.isEligible ? formatCurrency(c.rateioAmount ?? c.allocatedAmount) : 'R$ 0,00'}
                             </span>
                             {c.isEligible && c.dedicatedGroupId ? (
-                              <span className="text-[11px] text-teal-700 block font-mono">
-                                Montante Específico ({formatPctPtBr(c.dedicatedGroupSharePct)})
-                              </span>
+                              <div className="space-y-0.5">
+                                <span className="text-[11px] text-teal-700 block font-mono">
+                                  Montante Específico ({formatPctPtBr(c.dedicatedGroupSharePct)})
+                                </span>
+                                {(c.dedicatedGroupEffectiveFactorPct ?? 100) < 100 && (
+                                  <span className="text-[10px] text-amber-700 block font-mono font-bold">
+                                    Fator {c.dedicatedGroupEffectiveFactorPct}% · Base {formatCurrency(c.baseAmount)}
+                                  </span>
+                                )}
+                                {(c.dedicatedGroupRedistributedBonus || 0) > 0 && (
+                                  <span className="text-[10px] text-emerald-700 block font-mono font-bold">
+                                    + {formatCurrency(c.dedicatedGroupRedistributedBonus || 0)} redist. fator
+                                  </span>
+                                )}
+                              </div>
                             ) : c.isEligible && c.performanceFactor < 1.0 ? (
                               <span className="text-[11px] text-amber-600 block font-mono">
                                 Base: {formatCurrency(c.baseAmount)} (75%)
@@ -4536,7 +4878,7 @@ export function BprCockpitModal({
                     Grupos de Montante Específico (Rateio Exclusivo)
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Colaboradores em grupos ativos deixam o rateio padrão E/T/O e dividem apenas o montante do grupo (sem corte de 75%).
+                    Destine um montante específico para os colaboradores selecionados, escolhendo a camada de origem e seguindo as regras do ciclo (elegibilidade e fator % com redistribuição) ou exceções.
                   </p>
                 </div>
               </div>
@@ -4573,7 +4915,7 @@ export function BprCockpitModal({
                       Nenhum grupo de montante específico criado ainda
                     </h4>
                     <p className="text-xs sm:text-sm text-slate-500">
-                      Crie um ou mais grupos para destinar um montante exclusivo a colaboradores selecionados, escolhendo rateio <strong>Igualitário</strong>, por <strong>Percentual (%)</strong> ou por <strong>Valor Absoluto (R$)</strong> e definindo a origem do recurso.
+                      Você pode selecionar colaboradores diretamente na grade principal (ou criar um grupo aqui), destinar um montante específico (ex.: R$ 5.000,00 retirados do Operacional para os Técnicos) e aplicar as regras do BPR com prévia Antes × Depois.
                     </p>
                   </div>
                   <button
@@ -4601,6 +4943,12 @@ export function BprCockpitModal({
                   const candidateMap = new Map<string, BprCandidateResult>();
                   summary.candidates.forEach(c => candidateMap.set(c.employeeId, c));
 
+                  const effectiveEligibilityPolicy: BprDedicatedGroupEligibilityPolicy =
+                    group.eligibilityPolicy ?? 'include_all_as_exception';
+                  const effectiveApplyPerf = group.applyPerformanceFactor ?? false;
+                  const effectiveReducedFactor = group.reducedFactorPct ?? 75;
+                  const effectiveRedistribute = group.redistributePerformanceResidual ?? true;
+
                   const totalPct = Number(
                     group.members.reduce((acc, m) => acc + Math.max(0, Number(m.percentage || 0)), 0).toFixed(2)
                   );
@@ -4608,11 +4956,16 @@ export function BprCockpitModal({
                     group.members.reduce((acc, m) => acc + Math.max(0, Number(m.amount || 0)), 0).toFixed(2)
                   );
                   const groupSummary = (summary.dedicatedGroupSummaries || []).find(s => s.groupId === group.id);
+                  const impactPreview = groupImpactPreviewMap.get(group.id);
                   const searchTerm = dedicatedMemberSearchByGroup[group.id] || '';
+                  const roleFilter = dedicatedRoleFilterByGroup[group.id] || '';
+                  const camadaPickFilter = dedicatedCamadaFilterByGroup[group.id] || '';
                   const normSearch = normalizeSearchText(searchTerm);
 
                   const filteredCandidatesForGroup = summary.candidates
                     .filter(c => {
+                      if (roleFilter && c.jobRole !== roleFilter) return false;
+                      if (camadaPickFilter && c.camada !== camadaPickFilter) return false;
                       if (!normSearch) return true;
                       const hay = normalizeSearchText(
                         `${c.name} ${c.corporateName || ''} ${c.responsibleName || ''} ${c.jobRole || ''} ${c.department || ''} ${c.company || ''}`
@@ -4626,25 +4979,46 @@ export function BprCockpitModal({
                       return (a.corporateName || a.name).localeCompare(b.corporateName || b.name, 'pt-BR');
                     });
 
+                  const batchAddableIds = filteredCandidatesForGroup
+                    .filter(c => {
+                      const otherGroupName = claimedByOtherGroup.get(c.employeeId);
+                      const isManExcl = (config.manuallyExcludedEmployeeIds || []).includes(c.employeeId);
+                      return !otherGroupName && !isManExcl && !memberIdsSet.has(c.employeeId);
+                    })
+                    .map(c => c.employeeId);
+
+                  const batchRemovableIds = filteredCandidatesForGroup
+                    .filter(c => memberIdsSet.has(c.employeeId))
+                    .map(c => c.employeeId);
+
+                  const previewLayerKey: BprCamada | null =
+                    group.fundingSource === 'E' || group.fundingSource === 'T' || group.fundingSource === 'O'
+                      ? group.fundingSource
+                      : null;
+
                   return (
                     <div
                       key={group.id}
-                      className={`bg-white rounded-2xl border p-4 sm:p-5 space-y-4 shadow-sm ${
-                        group.enabled ? 'border-teal-200' : 'border-slate-200 opacity-75'
+                      className={`bg-white rounded-2xl border p-4 sm:p-5 space-y-4 shadow-sm transition-all ${
+                        group.enabled
+                          ? activeEditingGroupId === group.id
+                            ? 'border-teal-400 ring-2 ring-teal-500/20'
+                            : 'border-teal-200'
+                          : 'border-slate-200 opacity-80'
                       }`}
                     >
                       {/* Cabeçalho do Card de Grupo */}
                       <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
                         <div className="flex-1 min-w-[200px] space-y-1.5">
                           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                            Nome do Grupo
+                            Nome do Grupo / Cenário Específico
                           </label>
                           <input
                             type="text"
                             value={group.name}
                             maxLength={80}
                             onChange={e => handleUpdateDedicatedGroup(group.id, { name: e.target.value })}
-                            placeholder="Ex: Equipe Projeto X, Liderança Comercial..."
+                            placeholder="Ex: Técnicos Operacional, Equipe Projeto X..."
                             className="w-full min-h-[40px] bg-slate-50 border border-slate-200 focus:border-teal-500 focus:bg-white rounded-xl px-3 py-1.5 text-sm font-black text-slate-900 outline-none"
                           />
                         </div>
@@ -4684,7 +5058,7 @@ export function BprCockpitModal({
                           value={group.criteriaDescription || ''}
                           maxLength={160}
                           onChange={e => handleUpdateDedicatedGroup(group.id, { criteriaDescription: e.target.value })}
-                          placeholder="Ex: Rateio exclusivo por entrega estratégica de projeto ou metas diferenciadas"
+                          placeholder="Ex: Destinação de R$ 5.000,00 da camada Operacional exclusivamente aos Técnicos conforme regras do BPR"
                           className="w-full min-h-[38px] bg-white border border-slate-200 focus:border-teal-500 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 outline-none"
                         />
                       </div>
@@ -4762,6 +5136,187 @@ export function BprCockpitModal({
                         </div>
                       </div>
 
+                      {/* Bloco: Regras do Grupo (Elegibilidade & Fator de Desempenho + Redistribuição) */}
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 space-y-3">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 block">
+                          Regras do Grupo (Elegibilidade &amp; Fator de Desempenho)
+                        </span>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                              Elegibilidade dentro do Grupo:
+                            </label>
+                            <select
+                              value={effectiveEligibilityPolicy}
+                              onChange={e =>
+                                handleUpdateDedicatedGroup(group.id, {
+                                  eligibilityPolicy: e.target.value as BprDedicatedGroupEligibilityPolicy,
+                                })
+                              }
+                              className="w-full min-h-[40px] bg-white border border-slate-300 focus:border-teal-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 outline-none"
+                            >
+                              <option value="follow_bpr_rules">Seguir regras do BPR (apenas elegíveis dividem)</option>
+                              <option value="include_all_as_exception">Incluir todos selecionados como exceção</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                              Fator Meta 90%–99% (%), salvo ajuste individual:
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="1"
+                                disabled={!effectiveApplyPerf}
+                                aria-label={`Percentual de fator reduzido do grupo ${group.name}`}
+                                value={effectiveReducedFactor}
+                                onChange={e => {
+                                  const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
+                                  handleUpdateDedicatedGroup(group.id, { reducedFactorPct: Number(v.toFixed(1)) });
+                                }}
+                                className={`w-24 min-h-[40px] rounded-xl border px-3 py-1.5 text-right font-mono font-black text-xs outline-none ${
+                                  effectiveApplyPerf
+                                    ? 'bg-white border-teal-300 text-teal-900 focus:border-teal-500'
+                                    : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                                }`}
+                              />
+                              <span className="text-xs font-black text-slate-500">%</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-4 pt-1">
+                          <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={effectiveApplyPerf}
+                              onChange={e =>
+                                handleUpdateDedicatedGroup(group.id, {
+                                  applyPerformanceFactor: e.target.checked,
+                                  reducedFactorPct: group.reducedFactorPct ?? 75,
+                                  redistributePerformanceResidual: group.redistributePerformanceResidual ?? true,
+                                })
+                              }
+                              className="w-4 h-4 rounded text-teal-600 border-slate-300 cursor-pointer"
+                            />
+                            <span>Aplicar fator de metas/desempenho do BPR</span>
+                          </label>
+
+                          <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={effectiveRedistribute}
+                              onChange={e =>
+                                handleUpdateDedicatedGroup(group.id, {
+                                  redistributePerformanceResidual: e.target.checked,
+                                })
+                              }
+                              className="w-4 h-4 rounded text-teal-600 border-slate-300 cursor-pointer"
+                            />
+                            <span>Redistribuir saldo retido pelo fator entre os demais membros elegíveis</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Quadro Executivo: Impacto Antes x Depois */}
+                      {impactPreview && (
+                        <div className="bg-sky-50/70 border border-sky-200 rounded-xl p-3 sm:p-4 space-y-2.5">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-sky-900 block">
+                            Prévia de Impacto Executivo (Antes × Depois deste Grupo)
+                          </span>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div className="bg-white border border-sky-200 rounded-xl p-3 space-y-1">
+                              <span className="text-[10px] font-black uppercase text-slate-400 block">
+                                {previewLayerKey
+                                  ? `Camada de Origem: ${previewLayerKey === 'E' ? 'Estratégico (E)' : previewLayerKey === 'T' ? 'Tático (T)' : 'Operacional (O)'}`
+                                  : group.fundingSource === 'extra_bonus'
+                                    ? 'Impacto no Montante Total (Acréscimo Extra)'
+                                    : 'Impacto no Bolo Geral (E + T + O)'}
+                              </span>
+                              {previewLayerKey ? (
+                                <div className="font-mono space-y-0.5">
+                                  <div className="text-slate-600">
+                                    <span className="font-sans font-semibold">Antes:</span>{' '}
+                                    <strong>{formatCurrency(impactPreview.beforeLayers[previewLayerKey].totalLayerAmount)}</strong> ÷{' '}
+                                    {impactPreview.beforeLayers[previewLayerKey].eligibleCount}p ={' '}
+                                    <strong>{formatCurrency(impactPreview.beforeLayers[previewLayerKey].amountPerEligible)}</strong>/p
+                                  </div>
+                                  <div className="text-sky-900">
+                                    <span className="font-sans font-semibold">Depois:</span>{' '}
+                                    <strong>{formatCurrency(impactPreview.afterLayers[previewLayerKey].totalLayerAmount)}</strong> ÷{' '}
+                                    {impactPreview.afterLayers[previewLayerKey].eligibleCount}p ={' '}
+                                    <strong className="text-emerald-700">{formatCurrency(impactPreview.afterLayers[previewLayerKey].amountPerEligible)}</strong>/p
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="font-mono space-y-0.5">
+                                  <div className="text-slate-600">
+                                    <span className="font-sans font-semibold">Antes:</span>{' '}
+                                    <strong>{formatCurrency(impactPreview.baseTotalPool)}</strong>
+                                  </div>
+                                  <div className="text-sky-900">
+                                    <span className="font-sans font-semibold">Depois:</span>{' '}
+                                    <strong>{formatCurrency(impactPreview.afterTotalPool)}</strong>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="bg-white border border-teal-200 rounded-xl p-3 space-y-1">
+                              <span className="text-[10px] font-black uppercase text-teal-700 block">
+                                Resultado deste Grupo ({group.name || 'Grupo'})
+                              </span>
+                              {impactPreview.groupSummary ? (
+                                <div className="font-mono space-y-0.5">
+                                  <div className="text-slate-700">
+                                    <span className="font-sans font-semibold">Montante:</span>{' '}
+                                    <strong className="text-teal-900">{formatCurrency(impactPreview.groupSummary.poolAmount)}</strong> ·{' '}
+                                    <span className="font-sans">
+                                      {impactPreview.groupSummary.eligibleMemberCount ?? impactPreview.groupSummary.memberCount} eleg.
+                                      {(impactPreview.groupSummary.ineligibleMemberCount || 0) > 0
+                                        ? ` (+${impactPreview.groupSummary.ineligibleMemberCount} inel.)`
+                                        : ''}
+                                    </span>
+                                  </div>
+                                  <div className="text-emerald-700 font-bold">
+                                    <span className="font-sans font-semibold text-slate-600">Alocado:</span>{' '}
+                                    {formatCurrency(impactPreview.groupSummary.allocatedTotal)}
+                                    {(impactPreview.groupSummary.eligibleMemberCount ?? impactPreview.groupSummary.memberCount) > 0 && (
+                                      <span className="text-slate-500 font-normal">
+                                        {' '}(méd. {formatCurrency(impactPreview.groupSummary.amountPerEligible || 0)}/p)
+                                      </span>
+                                    )}
+                                  </div>
+                                  {(impactPreview.groupSummary.redistributedAmount || 0) > 0 && (
+                                    <div className="text-[11px] text-teal-800 font-sans font-semibold">
+                                      Redistribuído por fator: {formatCurrency(impactPreview.groupSummary.redistributedAmount || 0)}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 italic block">
+                                  Selecione ao menos 1 colaborador para calcular o impacto.
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {impactPreview.hasFundingOverflow && (
+                            <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-2">
+                              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                              <span>
+                                Atenção: o montante do grupo excede o saldo disponível da camada em {formatCurrency(impactPreview.overflowAmount)}; o excedente será abatido proporcionalmente das demais camadas.
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Membros Selecionados & Critérios Individuais */}
                       <div className="bg-teal-50/50 border border-teal-200/80 rounded-xl p-3 sm:p-4 space-y-2.5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -4800,7 +5355,7 @@ export function BprCockpitModal({
 
                         {group.members.length === 0 ? (
                           <p className="text-xs text-slate-500 italic">
-                            Selecione colaboradores na lista abaixo para incluí-los neste grupo exclusivo.
+                            Selecione colaboradores na lista abaixo (ou diretamente na grade principal) para incluí-los neste grupo.
                           </p>
                         ) : (
                           <div className="space-y-2">
@@ -4809,24 +5364,46 @@ export function BprCockpitModal({
                               const labelName = cand
                                 ? (cand.corporateName || cand.name)
                                 : m.employeeId;
-                              const isException = cand ? cand.ineligibilityReasons.length > 0 : false;
-                              const liveShare =
+                              const isActiveCalculated = Boolean(config.allowDedicatedGroups && group.enabled && cand && cand.dedicatedGroupId === group.id);
+                              const isIneligibleInGroup = isActiveCalculated
+                                ? !cand?.isEligible
+                                : Boolean(cand && effectiveEligibilityPolicy === 'follow_bpr_rules' && !cand.isEligible);
+                              const isExceptionApplied = Boolean(cand && cand.ineligibilityReasons.length > 0 && !isIneligibleInGroup);
+
+                              const fallbackRawShare =
                                 group.distributionMode === 'equal'
                                   ? (group.members.length > 0 ? Number((group.poolAmount / group.members.length).toFixed(2)) : 0)
                                   : group.distributionMode === 'percentage'
                                     ? Number(((group.poolAmount * Math.max(0, Number(m.percentage || 0))) / 100).toFixed(2))
                                     : Math.max(0, Number(m.amount || 0));
-                              const livePct =
+                              const fallbackPct =
                                 group.distributionMode === 'equal'
                                   ? (group.members.length > 0 ? Number((100 / group.members.length).toFixed(1)) : 0)
                                   : group.distributionMode === 'percentage'
                                     ? Number(m.percentage || 0)
-                                    : (totalMemberAmt > 0 ? Number(((liveShare / totalMemberAmt) * 100).toFixed(1)) : 0);
+                                    : (totalMemberAmt > 0 ? Number(((fallbackRawShare / totalMemberAmt) * 100).toFixed(1)) : 0);
+
+                              const liveShare = isActiveCalculated
+                                ? (cand?.isEligible ? (cand.rateioAmount ?? cand.allocatedAmount ?? 0) : 0)
+                                : (isIneligibleInGroup ? 0 : fallbackRawShare);
+                              const livePct = isActiveCalculated
+                                ? (cand?.dedicatedGroupSharePct || 0)
+                                : (isIneligibleInGroup ? 0 : fallbackPct);
+
+                              const defaultCycleFactorPlaceholder = !effectiveApplyPerf
+                                ? '100'
+                                : (cand?.performanceFactor ?? 1.0) >= 1.0
+                                  ? '100'
+                                  : (cand?.performanceFactor ?? 1.0) > 0
+                                    ? String(effectiveReducedFactor)
+                                    : '0';
 
                               return (
                                 <div
                                   key={m.employeeId}
-                                  className="bg-white border border-teal-200/80 rounded-xl px-3 py-2 flex flex-wrap items-center justify-between gap-2"
+                                  className={`bg-white border rounded-xl px-3 py-2 flex flex-wrap items-center justify-between gap-2 ${
+                                    isIneligibleInGroup ? 'border-rose-200 bg-rose-50/40' : 'border-teal-200/80'
+                                  }`}
                                 >
                                   <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-1.5">
@@ -4838,7 +5415,14 @@ export function BprCockpitModal({
                                           {cand.camada} · {cand.company}
                                         </span>
                                       )}
-                                      {isException && (
+                                      {isIneligibleInGroup ? (
+                                        <span
+                                          className="text-[10px] font-black px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200"
+                                          title={cand?.ineligibilityReasons.join(', ')}
+                                        >
+                                          Inelegível pela regra BPR (R$ 0,00)
+                                        </span>
+                                      ) : isExceptionApplied && (
                                         <span
                                           className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200"
                                           title={cand?.ineligibilityReasons.join(', ')}
@@ -4850,11 +5434,16 @@ export function BprCockpitModal({
                                     {cand && (
                                       <span className="text-[11px] text-slate-400 block truncate">
                                         {cand.jobRole} · {cand.department}
+                                        {isActiveCalculated && (cand.dedicatedGroupRedistributedBonus || 0) > 0 && (
+                                          <span className="text-emerald-700 font-bold ml-1.5">
+                                            · +{formatCurrency(cand.dedicatedGroupRedistributedBonus || 0)} redistribuído
+                                          </span>
+                                        )}
                                       </span>
                                     )}
                                   </div>
 
-                                  <div className="flex items-center gap-2 shrink-0">
+                                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                                     {group.distributionMode === 'percentage' && (
                                       <div className="flex items-center gap-1">
                                         <input
@@ -4892,8 +5481,36 @@ export function BprCockpitModal({
                                       </div>
                                     )}
 
+                                    {/* Campo editável de Fator % do colaborador dentro do grupo */}
+                                    <div className="flex items-center gap-1" title="Fator de desempenho (%) aplicado à cota deste colaborador (deixe vazio para usar o padrão do ciclo)">
+                                      <span className="text-[10px] font-bold text-slate-500 uppercase">Fator:</span>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="5"
+                                        disabled={isIneligibleInGroup}
+                                        aria-label={`Fator percentual para ${labelName}`}
+                                        value={m.customFactorPct !== undefined ? m.customFactorPct : ''}
+                                        placeholder={isIneligibleInGroup ? '0' : defaultCycleFactorPlaceholder}
+                                        onChange={e =>
+                                          handleUpdateDedicatedMemberFactor(group.id, m.employeeId, e.target.value)
+                                        }
+                                        className={`w-16 min-h-[38px] rounded-lg border px-1.5 py-1 text-right font-mono font-black text-xs outline-none ${
+                                          isIneligibleInGroup
+                                            ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                                            : m.customFactorPct !== undefined
+                                              ? 'bg-amber-50 border-amber-300 text-amber-900 focus:border-amber-500'
+                                              : 'bg-slate-50 border-slate-200 text-slate-700 focus:bg-white focus:border-teal-500'
+                                        }`}
+                                      />
+                                      <span className="text-[11px] font-black text-slate-500">%</span>
+                                    </div>
+
                                     <div className="text-right font-mono min-w-[92px]">
-                                      <strong className="text-xs font-black text-emerald-700 block">
+                                      <strong className={`text-xs font-black block ${
+                                        isIneligibleInGroup ? 'text-rose-500' : 'text-emerald-700'
+                                      }`}>
                                         {formatCurrency(liveShare)}
                                       </strong>
                                       <span className="text-[10px] font-bold text-slate-400 block">
@@ -4917,30 +5534,92 @@ export function BprCockpitModal({
                         )}
                       </div>
 
-                      {/* Seletor de Colaboradores para o Grupo */}
+                      {/* Seletor de Colaboradores para o Grupo com Seleção em Lote */}
                       <div className="space-y-2">
-                        <div className="relative">
-                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                          <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={e =>
-                              setDedicatedMemberSearchByGroup(prev => ({ ...prev, [group.id]: e.target.value }))
-                            }
-                            placeholder="Buscar colaborador para adicionar ao grupo (nome, razão social, cargo ou empresa)..."
-                            className="w-full min-h-[40px] bg-white border border-slate-200 focus:border-teal-500 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-800 outline-none"
-                          />
-                          {searchTerm && (
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                          <div className="relative sm:col-span-6">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              value={searchTerm}
+                              onChange={e =>
+                                setDedicatedMemberSearchByGroup(prev => ({ ...prev, [group.id]: e.target.value }))
+                              }
+                              placeholder="Buscar por nome, razão social, cargo ou empresa..."
+                              className="w-full min-h-[40px] bg-white border border-slate-200 focus:border-teal-500 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-800 outline-none"
+                            />
+                            {searchTerm && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDedicatedMemberSearchByGroup(prev => ({ ...prev, [group.id]: '' }))
+                                }
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="sm:col-span-3">
+                            <select
+                              aria-label={`Filtrar cargo para adicionar ao grupo ${group.name}`}
+                              value={roleFilter}
+                              onChange={e =>
+                                setDedicatedRoleFilterByGroup(prev => ({ ...prev, [group.id]: e.target.value }))
+                              }
+                              className="w-full min-h-[40px] bg-white border border-slate-200 focus:border-teal-500 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                            >
+                              <option value="">Todos os Cargos</option>
+                              {availableJobRoles.map(r => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="sm:col-span-3">
+                            <select
+                              aria-label={`Filtrar camada para adicionar ao grupo ${group.name}`}
+                              value={camadaPickFilter}
+                              onChange={e =>
+                                setDedicatedCamadaFilterByGroup(prev => ({ ...prev, [group.id]: e.target.value }))
+                              }
+                              className="w-full min-h-[40px] bg-white border border-slate-200 focus:border-teal-500 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                            >
+                              <option value="">Todas as Camadas</option>
+                              <option value="O">Operacional/CLTs (O)</option>
+                              <option value="T">Tático (T)</option>
+                              <option value="E">Estratégico (E)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Atalhos de Seleção em Lote */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span className="text-[11px] font-bold text-slate-500">
+                            {filteredCandidatesForGroup.length} colaborador(es) exibido(s) no filtro
+                          </span>
+                          <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
-                              onClick={() =>
-                                setDedicatedMemberSearchByGroup(prev => ({ ...prev, [group.id]: '' }))
-                              }
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                              disabled={batchAddableIds.length === 0}
+                              onClick={() => handleBatchSelectDedicatedMembers(group.id, batchAddableIds, 'add')}
+                              className="min-h-[34px] px-3 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 disabled:opacity-40 text-teal-800 border border-teal-300 text-[11px] font-black cursor-pointer"
                             >
-                              <X size={14} />
+                              Marcar filtrados ({batchAddableIds.length})
                             </button>
-                          )}
+                            {batchRemovableIds.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => handleBatchSelectDedicatedMembers(group.id, batchRemovableIds, 'remove')}
+                                className="min-h-[34px] px-3 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 text-[11px] font-bold cursor-pointer"
+                              >
+                                Desmarcar filtrados ({batchRemovableIds.length})
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl bg-white">
@@ -4995,7 +5674,7 @@ export function BprCockpitModal({
                                       </span>
                                     ) : isExceptionCandidate ? (
                                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                                        Exceção permitida
+                                        {effectiveEligibilityPolicy === 'follow_bpr_rules' ? 'Inelegível BPR' : 'Exceção permitida'}
                                       </span>
                                     ) : (
                                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -5019,20 +5698,30 @@ export function BprCockpitModal({
             <div className="px-4 sm:px-6 py-4 border-t border-slate-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="text-xs font-mono space-y-0.5">
                 <span className="font-sans text-[11px] font-bold text-slate-500 block">
-                  {summary.dedicatedGroupsCount || 0} grupo(s) ativo(s) · {summary.dedicatedMembersCount || 0} colaborador(es) exclusivo(s)
+                  {summary.dedicatedGroupsCount || 0} grupo(s) ativo(s) · {summary.dedicatedMembersCount || 0} colaborador(es) elegível(is)
                 </span>
                 <strong className="text-sm font-black text-teal-800 block">
                   Total Alocado nos Grupos: {formatCurrency(summary.dedicatedGroupsAllocatedTotal || 0)}
                 </strong>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsDedicatedGroupsModalOpen(false)}
-                className="min-h-[44px] px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-md transition-all cursor-pointer active:scale-95"
-              >
-                Concluir &amp; Aplicar
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDedicatedGroupsModalOpen(false)}
+                  className="min-h-[44px] px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                >
+                  Aplicar no Simulador
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyGroupsAndSaveScenario}
+                  className="min-h-[44px] px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+                >
+                  <Save size={15} />
+                  <span>Aplicar e Salvar Novo Cenário</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
