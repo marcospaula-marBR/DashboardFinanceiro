@@ -170,14 +170,33 @@ export function BprCockpitModal({
     const sanitized = !isNaN(parsed) && parsed > 0 ? Number(parsed.toFixed(2)) : 0;
     setConfig(prev => {
       const nextMap = { ...(prev.additionalAmounts || {}) };
+      const nextReasons = { ...(prev.additionalReasons || {}) };
       if (sanitized > 0) {
         nextMap[employeeId] = sanitized;
       } else {
         delete nextMap[employeeId];
+        delete nextReasons[employeeId];
       }
       return {
         ...prev,
-        additionalAmounts: nextMap
+        additionalAmounts: nextMap,
+        additionalReasons: nextReasons
+      };
+    });
+  };
+
+  // Atualização de Motivo / Observação do Valor Adicional
+  const handleAdditionalReasonChange = (employeeId: string, reason: string) => {
+    setConfig(prev => {
+      const nextReasons = { ...(prev.additionalReasons || {}) };
+      if (reason.trim()) {
+        nextReasons[employeeId] = reason.slice(0, 120);
+      } else {
+        delete nextReasons[employeeId];
+      }
+      return {
+        ...prev,
+        additionalReasons: nextReasons
       };
     });
   };
@@ -185,9 +204,13 @@ export function BprCockpitModal({
   const handleClearAllAdditionalAmounts = () => {
     setConfig(prev => ({
       ...prev,
-      additionalAmounts: {}
+      additionalAmounts: {},
+      additionalReasons: {}
     }));
   };
+
+  const formatPctPtBr = (val?: number) =>
+    `${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
   // Atualização de Ciclo
   const handleCycleChange = (cycle: BprCycle) => {
@@ -295,6 +318,7 @@ export function BprCockpitModal({
         totalPoolAmount: summary.totalPoolAmount,
         totalAdditionalAmount: summary.totalAdditionalAmount,
         netPoolForLayers: summary.netPoolForLayers,
+        totalPeriodReceivedAmount: summary.totalPeriodReceivedAmount,
         totalDistributedAmount: summary.totalDistributedAmount,
         residualAmount: summary.residualAmount,
         totalCandidates: summary.totalCandidates,
@@ -1554,13 +1578,14 @@ export function BprCockpitModal({
                   <th className="py-3.5 px-4 text-right">Rateio Nível (R$)</th>
                   <th className="py-3.5 px-4 text-right">+ Adicional (R$)</th>
                   <th className="py-3.5 px-5 text-right">Valor Total BPR (R$)</th>
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Histórico Período</th>
                   <th className="py-3.5 px-4 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {displayedCandidates.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-16 text-center text-slate-400 font-bold text-base">
+                    <td colSpan={11} className="py-16 text-center text-slate-400 font-bold text-base">
                       Nenhum contratado encontrado com os filtros selecionados.
                     </td>
                   </tr>
@@ -1684,46 +1709,61 @@ export function BprCockpitModal({
                           </div>
                         </td>
 
-                        {/* + Adicional (R$) */}
+                        {/* + Adicional (R$) + Motivo/Observação */}
                         <td className="py-3.5 px-4 text-right">
-                          <div className="inline-flex items-center justify-end gap-1">
-                            <div className="relative">
-                              <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold ${
-                                !c.isEligible
-                                  ? 'text-slate-300'
-                                  : (config.additionalAmounts?.[c.employeeId] || 0) > 0
-                                    ? 'text-amber-700'
-                                    : 'text-slate-400'
-                              }`}>
-                                R$
-                              </span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="100"
-                                disabled={!c.isEligible}
-                                aria-label={`Valor adicional BPR para ${displayName}`}
-                                placeholder="0,00"
-                                value={c.isEligible && (config.additionalAmounts?.[c.employeeId] || 0) > 0 ? config.additionalAmounts?.[c.employeeId] : ''}
-                                onChange={e => handleAdditionalAmountChange(c.employeeId, e.target.value)}
-                                className={`w-28 min-h-[38px] pl-7 pr-2 py-1 text-right text-xs font-black font-mono rounded-lg border outline-none transition-all ${
+                          <div className="flex flex-col items-end gap-1.5">
+                            <div className="inline-flex items-center justify-end gap-1">
+                              <div className="relative">
+                                <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold ${
                                   !c.isEligible
-                                    ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                                    ? 'text-slate-300'
                                     : (config.additionalAmounts?.[c.employeeId] || 0) > 0
-                                      ? 'bg-amber-50 border-amber-300 text-amber-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15'
-                                      : 'bg-white border-slate-200 text-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15'
-                                }`}
-                              />
+                                      ? 'text-amber-700'
+                                      : 'text-slate-400'
+                                }`}>
+                                  R$
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="100"
+                                  disabled={!c.isEligible}
+                                  aria-label={`Valor adicional BPR para ${displayName}`}
+                                  placeholder="0,00"
+                                  value={c.isEligible && (config.additionalAmounts?.[c.employeeId] || 0) > 0 ? config.additionalAmounts?.[c.employeeId] : ''}
+                                  onChange={e => handleAdditionalAmountChange(c.employeeId, e.target.value)}
+                                  className={`w-28 min-h-[38px] pl-7 pr-2 py-1 text-right text-xs font-black font-mono rounded-lg border outline-none transition-all ${
+                                    !c.isEligible
+                                      ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                                      : (config.additionalAmounts?.[c.employeeId] || 0) > 0
+                                        ? 'bg-amber-50 border-amber-300 text-amber-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15'
+                                        : 'bg-white border-slate-200 text-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15'
+                                  }`}
+                                />
+                              </div>
+                              {c.isEligible && (config.additionalAmounts?.[c.employeeId] || 0) > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdditionalAmountChange(c.employeeId, '0')}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                                  title="Zerar adicional e observação deste colaborador"
+                                >
+                                  <X size={13} />
+                                </button>
+                              )}
                             </div>
+
                             {c.isEligible && (config.additionalAmounts?.[c.employeeId] || 0) > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => handleAdditionalAmountChange(c.employeeId, '0')}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
-                                title="Zerar adicional deste colaborador"
-                              >
-                                <X size={13} />
-                              </button>
+                              <input
+                                type="text"
+                                maxLength={120}
+                                aria-label={`Motivo do valor adicional para ${displayName}`}
+                                placeholder="Motivo (ex: Entrega Projeto X)"
+                                value={config.additionalReasons?.[c.employeeId] || ''}
+                                onChange={e => handleAdditionalReasonChange(c.employeeId, e.target.value)}
+                                title={config.additionalReasons?.[c.employeeId] || 'Informe uma observação ou justificativa curta para auditoria'}
+                                className="w-40 min-h-[30px] px-2 py-1 text-[11px] font-medium bg-white border border-amber-200 rounded-md text-slate-700 placeholder:text-slate-400 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/15"
+                              />
                             )}
                           </div>
                         </td>
@@ -1737,11 +1777,59 @@ export function BprCockpitModal({
                               {c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00'}
                             </span>
                             {c.isEligible && (c.additionalAmount || 0) > 0 && (
-                              <span className="inline-block text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-mono">
-                                + {formatCurrency(c.additionalAmount || 0)} Adic.
-                              </span>
+                              <div className="flex flex-col items-end gap-0.5">
+                                <span
+                                  title={c.additionalReason ? `Justificativa: ${c.additionalReason}` : 'Valor adicional individual'}
+                                  className="inline-block text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-mono cursor-help"
+                                >
+                                  + {formatCurrency(c.additionalAmount || 0)} Adic.
+                                </span>
+                                {c.additionalReason && (
+                                  <span
+                                    title={c.additionalReason}
+                                    className="text-[10px] text-amber-700/80 font-medium truncate max-w-[145px] block"
+                                  >
+                                    {c.additionalReason}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
+                        </td>
+
+                        {/* Histórico Financeiro no Período de Apuração (3 linhas: Montante, Média e % BPR) */}
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          {(c.periodMonthsCount || 0) > 0 && (c.periodReceivedTotal || 0) > 0 ? (
+                            <div
+                              className="space-y-0.5 font-mono"
+                              title={`Histórico People (${c.periodMonthsCount} comp. no período ${config.periodStartDate} a ${config.periodEndDate}): Montante ${formatCurrency(c.periodReceivedTotal || 0)} | Média ${formatCurrency(c.periodReceivedAverage || 0)} | BPR equivale a ${formatPctPtBr(c.bprVsAveragePct)} da média e ${formatPctPtBr(c.bprVsTotalPct)} do montante`}
+                            >
+                              <div className="text-xs font-black text-slate-800">
+                                <span className="font-sans font-bold text-[10px] text-slate-400 mr-1">Mont.:</span>
+                                {formatCurrency(c.periodReceivedTotal || 0)}
+                              </div>
+                              <div className="text-[11px] font-bold text-slate-600">
+                                <span className="font-sans font-semibold text-[10px] text-slate-400 mr-1">
+                                  Média ({c.periodMonthsCount}m):
+                                </span>
+                                {formatCurrency(c.periodReceivedAverage || 0)}
+                              </div>
+                              <div className={`text-[10px] font-black px-1.5 py-0.5 rounded inline-block border ${
+                                c.isEligible
+                                  ? 'bg-sky-50 text-sky-800 border-sky-200'
+                                  : 'bg-slate-50 text-slate-400 border-slate-200'
+                              }`}>
+                                BPR: {formatPctPtBr(c.bprVsAveragePct)} méd. · {formatPctPtBr(c.bprVsTotalPct)} mont.
+                              </div>
+                            </div>
+                          ) : (
+                            <span
+                              className="text-[11px] font-medium text-slate-400 italic"
+                              title={`Nenhum lançamento encontrado no custo histórico do People entre ${config.periodStartDate} e ${config.periodEndDate}`}
+                            >
+                              Sem histórico no período
+                            </span>
+                          )}
                         </td>
 
                         {/* Ação de Exclusão / Restauração Manual */}

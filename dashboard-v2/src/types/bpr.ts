@@ -29,6 +29,7 @@ export interface BprRuleConfig {
   tierSplits: BprTierSplit; // Percentuais por camada
   tierAmounts?: BprTierAmounts; // Valores fixos em R$ por camada
   additionalAmounts?: Record<string, number>; // Mapa employeeId -> valor adicional em R$
+  additionalReasons?: Record<string, string>; // Mapa employeeId -> motivo / observação curta do adicional
   additionalDeductionSource?: BprAdditionalDeductionSource; // 'total_pool' (padrão) | 'own_layer' | 'E' | 'T' | 'O'
   allowGlosados: boolean;
   selectedGlosadosExceptions: string[]; // IDs de colaboradores glosados que farão jus excepcionalmente
@@ -99,7 +100,15 @@ export interface BprCandidateResult {
   baseAmount: number;        // R$ valor base cheio da camada
   rateioAmount?: number;     // R$ valor do rateio da camada após fator de desempenho (baseAmount * performanceFactor)
   additionalAmount?: number; // R$ valor adicional individual inserido para o colaborador
+  additionalReason?: string; // Motivo / observação curta vinculada ao adicional individual
   allocatedAmount: number;   // R$ valor individual final (rateioAmount + additionalAmount)
+
+  // Histórico Financeiro no Período de Apuração do BPR (Custo Histórico People)
+  periodReceivedTotal?: number;   // R$ montante total recebido no período eletivo do BPR
+  periodReceivedAverage?: number; // R$ média mensal recebida no período eletivo do BPR
+  periodMonthsCount?: number;     // Quantidade de competências encontradas no histórico dentro do período
+  bprVsAveragePct?: number;       // % que o BPR final equivale em relação à média mensal recebida
+  bprVsTotalPct?: number;         // % que o BPR final equivale em relação ao montante total recebido no período
 }
 
 export interface BprLayerSummary {
@@ -116,8 +125,9 @@ export interface BprLayerSummary {
 
 export interface BprCalculationSummary {
   totalPoolAmount: number;
-  totalAdditionalAmount?: number; // R$ soma de todos os valores adicionais dos elegíveis
-  netPoolForLayers?: number;      // R$ saldo líquido efetivamente rateado entre as camadas E, T e O
+  totalAdditionalAmount?: number;     // R$ soma de todos os valores adicionais dos elegíveis
+  netPoolForLayers?: number;          // R$ saldo líquido efetivamente rateado entre as camadas E, T e O
+  totalPeriodReceivedAmount?: number; // R$ soma dos montantes históricos recebidos pelos elegíveis no período
   totalDistributedAmount: number;
   residualAmount: number;
   totalCandidates: number;
@@ -141,6 +151,7 @@ export interface BprSavedScenario {
     totalPoolAmount: number;
     totalAdditionalAmount?: number;
     netPoolForLayers?: number;
+    totalPeriodReceivedAmount?: number;
     totalDistributedAmount: number;
     residualAmount: number;
     totalCandidates: number;

@@ -1,22 +1,23 @@
 import { Employee, MonthlyCost, getPBClassification, normalizeCompanyName } from '@/types/loans';
-import { 
-  BprRuleConfig, 
-  BprCandidateResult, 
-  BprCalculationSummary, 
-  BprCamada, 
-  BprLayerSummary, 
+import {
+  BprRuleConfig,
+  BprCandidateResult,
+  BprCalculationSummary,
+  BprCamada,
+  BprLayerSummary,
   BprCycle,
   BprSavedScenario,
   BprSavedRun
 } from '@/types/bpr';
 import { supabase } from '@/lib/supabase';
+import { calculateRowFinancials } from '@/services/people-hr.service';
 
 const BPR_STORAGE_KEY = 'marbrasil_bpr_config_v1';
 const BPR_RUNS_STORAGE_KEY = 'marbrasil_bpr_runs_history_v1';
 const BPR_SCENARIOS_STORAGE_KEY = 'marbrasil_bpr_scenarios_v2';
 
 export class BprService {
-  
+
   /**
    * Retorna a configuração padrão para um determinado ciclo e ano de referência
    */
@@ -34,6 +35,7 @@ export class BprService {
         tierSplits: { E: 30, T: 40, O: 30 },
         tierAmounts: { E: 30000, T: 40000, O: 30000 },
         additionalAmounts: {},
+        additionalReasons: {},
         additionalDeductionSource: 'total_pool',
         allowGlosados: false,
         selectedGlosadosExceptions: [],
@@ -56,6 +58,7 @@ export class BprService {
         tierSplits: { E: 30, T: 40, O: 30 },
         tierAmounts: { E: 30000, T: 40000, O: 30000 },
         additionalAmounts: {},
+        additionalReasons: {},
         additionalDeductionSource: 'total_pool',
         allowGlosados: false,
         selectedGlosadosExceptions: [],
@@ -77,6 +80,7 @@ export class BprService {
         tierSplits: { E: 30, T: 40, O: 30 },
         tierAmounts: { E: 30000, T: 40000, O: 30000 },
         additionalAmounts: {},
+        additionalReasons: {},
         additionalDeductionSource: 'total_pool',
         allowGlosados: false,
         selectedGlosadosExceptions: [],
@@ -94,7 +98,7 @@ export class BprService {
    */
   static getEmployeeCamada(e: Employee): { camada: BprCamada; label: string } {
     let camadaStr = (e.camada || '').trim().toUpperCase();
-    
+
     if (!camadaStr) {
       const pbClass = getPBClassification(e.camada, e.nivel);
       if (pbClass.startsWith('E')) camadaStr = 'E';
@@ -218,15 +222,24 @@ export class BprService {
       curMonth.setMonth(curMonth.getMonth() + 1);
     }
 
-    // Mapa de glosas por colaborador nas competências do ciclo
+    // Mapa de glosas e custos históricos por colaborador nas competências do ciclo (O(M))
+    const cycleMonthsSet = new Set(cycleMonths);
     const glosaByEmployeeId = new Map<string, { hasGlosa: boolean; details: string[] }>();
+    const periodCostsByEmployeeId = new Map<string, MonthlyCost[]>();
     monthlyCosts.forEach(mc => {
       if (!mc.employee_id) return;
       const comp = (mc.competencia || '').slice(0, 7);
-      if (cycleMonths.includes(comp)) {
-        const glosaVal = Number(mc.valor_glosa_base || 0) + 
-                         Number(mc.valor_glosa_bonus || 0) + 
-                         Number((mc as any).glosa || (mc as any).desconto_glosa || 0);
+      if (cycleMonthsSet.has(comp)) {
+        const list = periodCostsByEmployeeId.get(mc.employee_id);
+        if (list) {
+          list.push(mc);
+        } else {
+          periodCostsByEmployeeId.set(mc.employee_id, [mc]);
+        }
+
+        const glosaVal = Number(mc.valor_glosa_base || 0) +
+          Number(mc.valor_glosa_bonus || 0) +
+          Number((mc as any).glosa || (mc as any).desconto_glosa || 0);
         if (glosaVal > 0) {
           const prev = glosaByEmployeeId.get(mc.employee_id) || { hasGlosa: false, details: [] };
           prev.hasGlosa = true;
@@ -256,17 +269,17 @@ export class BprService {
           return;
         }
       }
-      
+
       const link = emp.linkType || 'CLT';
-      const isEstagio = link.toLowerCase().includes('estag') || 
-        link.toLowerCase().includes('estág') || 
-        (emp.job_role || '').toLowerCase().includes('estag') || 
+      const isEstagio = link.toLowerCase().includes('estag') ||
+        link.toLowerCase().includes('estág') ||
+        (emp.job_role || '').toLowerCase().includes('estag') ||
         (emp.job_role || '').toLowerCase().includes('estág') ||
         ((emp as any).employment_type || '').toLowerCase().includes('estag') ||
         ((emp as any).employment_type || '').toLowerCase().includes('estág');
 
       if (config.linkTypesFilter.length > 0) {
-        const matchesLink = config.linkTypesFilter.includes(link) || 
+        const matchesLink = config.linkTypesFilter.includes(link) ||
           (config.linkTypesFilter.includes('Estagiário') && isEstagio) ||
           (config.linkTypesFilter.includes('CLT') && (link === 'CLT' || isEstagio)) ||
           (config.linkTypesFilter.includes('Terceirizado') && emp.is_outsourced);
@@ -276,7 +289,7 @@ export class BprService {
       // 2. Análise de Datas Real (NÃO usar contract_expiry_date como data de rescisão)
       const startDateStr = emp.start_date;
       const startDate = startDateStr ? new Date(`${startDateStr}T00:00:00`) : null;
-      
+
       // Data real de desligamento (apenas se realmente foi desligado)
       const realResignationDateStr = emp.resignation_date || (emp as any).status_end_date;
       const realResignationDate = realResignationDateStr ? new Date(`${realResignationDateStr}T23:59:59`) : null;
@@ -289,8 +302,8 @@ export class BprService {
 
       // Ativo na data de pagamento (inclusive)
       const isStatusActive = emp.status === 'Ativo' || emp.status === 'Férias';
-      const activeAtPaymentDate = realResignationDate 
-        ? realResignationDate >= paymentDate 
+      const activeAtPaymentDate = realResignationDate
+        ? realResignationDate >= paymentDate
         : isStatusActive;
 
       // Inativo na data de pagamento
@@ -366,6 +379,30 @@ export class BprService {
 
       const { camada, label: camadaLabel } = this.getEmployeeCamada(emp);
 
+      // Histórico financeiro recebido no período de apuração do BPR (Custo Histórico People)
+      const empPeriodCosts = periodCostsByEmployeeId.get(emp.id) || [];
+      const linkUpper = String(link || (emp as Employee & { employment_type?: string }).employment_type || '').toUpperCase();
+      const monthTotals = new Map<string, number>();
+      empPeriodCosts.forEach(mc => {
+        const comp = (mc.competencia || '').slice(0, 7);
+        const mcVinculoUpper = String(mc.vinculo_tipo || '').toUpperCase();
+        const isCLTBranch = mcVinculoUpper
+          ? (mcVinculoUpper === 'CLT' || mcVinculoUpper.includes('ESTAG') || mcVinculoUpper.includes('ESTÁG'))
+          : (isEstagio || linkUpper.includes('CLT'));
+        const fin = calculateRowFinancials(mc, isCLTBranch);
+        const realVal = Number(fin.realTotal || 0);
+        if (realVal > 0) {
+          monthTotals.set(comp, Number(((monthTotals.get(comp) || 0) + realVal).toFixed(2)));
+        }
+      });
+      const periodMonthsCount = monthTotals.size;
+      const periodReceivedTotal = Number(
+        Array.from(monthTotals.values()).reduce((acc, v) => acc + v, 0).toFixed(2)
+      );
+      const periodReceivedAverage = periodMonthsCount > 0
+        ? Number((periodReceivedTotal / periodMonthsCount).toFixed(2))
+        : 0;
+
       const candidateResult: BprCandidateResult = {
         employeeId: emp.id,
         name: emp.name,
@@ -399,7 +436,12 @@ export class BprService {
         isExceptionApplied,
         ineligibilityReasons,
         baseAmount: 0,
-        allocatedAmount: 0 // Será calculado após a contagem de elegíveis
+        allocatedAmount: 0, // Será calculado após a contagem de elegíveis
+        periodReceivedTotal,
+        periodReceivedAverage,
+        periodMonthsCount,
+        bprVsAveragePct: 0,
+        bprVsTotalPct: 0
       };
 
       candidates.push(candidateResult);
@@ -446,15 +488,15 @@ export class BprService {
     const isAmountMode = config.splitMode === 'amount' && !!config.tierAmounts;
     const gross: Record<BprCamada, number> = isAmountMode
       ? {
-          E: Math.max(0, Number(config.tierAmounts?.E || 0)),
-          T: Math.max(0, Number(config.tierAmounts?.T || 0)),
-          O: Math.max(0, Number(config.tierAmounts?.O || 0)),
-        }
+        E: Math.max(0, Number(config.tierAmounts?.E || 0)),
+        T: Math.max(0, Number(config.tierAmounts?.T || 0)),
+        O: Math.max(0, Number(config.tierAmounts?.O || 0)),
+      }
       : {
-          E: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.E || 0)) / 100),
-          T: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.T || 0)) / 100),
-          O: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.O || 0)) / 100),
-        };
+        E: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.E || 0)) / 100),
+        T: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.T || 0)) / 100),
+        O: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.O || 0)) / 100),
+      };
 
     const grossLayersSum = Number((gross.E + gross.T + gross.O).toFixed(2));
     const effectiveTotalPool = isAmountMode
@@ -564,21 +606,38 @@ export class BprService {
       }
     };
 
-    // Atribuição Individual (rateio da camada * desempenho + valor adicional)
+    // Atribuição Individual (rateio da camada * desempenho + valor adicional) e comparativo histórico
     let totalDistributed = 0;
+    let totalPeriodReceivedAmount = 0;
+    const reasonsMap = config.additionalReasons || {};
     const updatedCandidates: BprCandidateResult[] = candidates.map(c => {
+      const periodTotal = Number((c.periodReceivedTotal || 0).toFixed(2));
+      const periodAvg = Number((c.periodReceivedAverage || 0).toFixed(2));
+      const periodMonths = c.periodMonthsCount || 0;
+
       if (c.isEligible) {
         const baseVal = layers[c.camada]?.amountPerEligible || 0;
         const rateioVal = Number((baseVal * (c.performanceFactor ?? 1.0)).toFixed(2));
         const addVal = Math.max(0, Number((Number(additionalMap[c.employeeId] || 0)).toFixed(2)));
+        const addReason = addVal > 0 ? ((reasonsMap[c.employeeId] || '').trim() || undefined) : undefined;
         const finalVal = Number((rateioVal + addVal).toFixed(2));
+        const bprVsAveragePct = periodAvg > 0 ? Number(((finalVal / periodAvg) * 100).toFixed(1)) : 0;
+        const bprVsTotalPct = periodTotal > 0 ? Number(((finalVal / periodTotal) * 100).toFixed(1)) : 0;
+
         totalDistributed += finalVal;
+        totalPeriodReceivedAmount += periodTotal;
         return {
           ...c,
           baseAmount: baseVal,
           rateioAmount: rateioVal,
           additionalAmount: addVal,
-          allocatedAmount: finalVal
+          additionalReason: addReason,
+          allocatedAmount: finalVal,
+          periodReceivedTotal: periodTotal,
+          periodReceivedAverage: periodAvg,
+          periodMonthsCount: periodMonths,
+          bprVsAveragePct,
+          bprVsTotalPct
         };
       }
       return {
@@ -586,18 +645,26 @@ export class BprService {
         baseAmount: 0,
         rateioAmount: 0,
         additionalAmount: 0,
-        allocatedAmount: 0
+        additionalReason: undefined,
+        allocatedAmount: 0,
+        periodReceivedTotal: periodTotal,
+        periodReceivedAverage: periodAvg,
+        periodMonthsCount: periodMonths,
+        bprVsAveragePct: 0,
+        bprVsTotalPct: 0
       };
     });
 
     const netPoolForLayers = Number((net.E + net.T + net.O).toFixed(2));
     const totalDistributedRounded = Number(totalDistributed.toFixed(2));
+    const totalPeriodReceivedRounded = Number(totalPeriodReceivedAmount.toFixed(2));
     const residualAmount = Math.max(0, Number((effectiveTotalPool - totalDistributedRounded).toFixed(2)));
 
     return {
       totalPoolAmount: effectiveTotalPool,
       totalAdditionalAmount,
       netPoolForLayers,
+      totalPeriodReceivedAmount: totalPeriodReceivedRounded,
       totalDistributedAmount: totalDistributedRounded,
       residualAmount,
       totalCandidates: updatedCandidates.length,
@@ -661,6 +728,7 @@ export class BprService {
         totalPoolAmount: recalculated.totalPoolAmount,
         totalAdditionalAmount: recalculated.totalAdditionalAmount,
         netPoolForLayers: recalculated.netPoolForLayers,
+        totalPeriodReceivedAmount: recalculated.totalPeriodReceivedAmount,
         totalDistributedAmount: recalculated.totalDistributedAmount,
         residualAmount: recalculated.residualAmount,
         totalCandidates: recalculated.totalCandidates,
@@ -733,7 +801,7 @@ export class BprService {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(BPR_STORAGE_KEY, JSON.stringify(config));
-    } catch {}
+    } catch { }
   }
 
   /**
@@ -744,7 +812,7 @@ export class BprService {
     try {
       const data = localStorage.getItem(BPR_STORAGE_KEY);
       if (data) return JSON.parse(data);
-    } catch {}
+    } catch { }
     return null;
   }
 
@@ -757,7 +825,7 @@ export class BprService {
       const existing = this.loadSavedScenarios();
       const updated = [scenario, ...existing.filter(s => s.id !== scenario.id)].slice(0, 50);
       localStorage.setItem(BPR_SCENARIOS_STORAGE_KEY, JSON.stringify(updated));
-    } catch {}
+    } catch { }
   }
 
   /**
@@ -791,7 +859,7 @@ export class BprService {
           candidatesSnapshot: []
         }));
       }
-    } catch {}
+    } catch { }
     return [];
   }
 
@@ -804,7 +872,7 @@ export class BprService {
       const existing = this.loadSavedScenarios();
       const updated = existing.filter(s => s.id !== id);
       localStorage.setItem(BPR_SCENARIOS_STORAGE_KEY, JSON.stringify(updated));
-    } catch {}
+    } catch { }
   }
 
   /**
@@ -812,7 +880,7 @@ export class BprService {
    */
   static async saveScenarioAsync(scenario: BprSavedScenario): Promise<void> {
     if (typeof window === 'undefined') return;
-    
+
     // 1. Salvar no LocalStorage
     this.saveScenario(scenario);
 

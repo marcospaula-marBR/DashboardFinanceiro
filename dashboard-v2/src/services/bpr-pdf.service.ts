@@ -11,6 +11,17 @@ import {
 const formatCurrency = (val: number) => 
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
+const formatPctPtBr = (val?: number) =>
+  `${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+const escapeHtml = (str?: string) =>
+  String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 const formatDatePtBr = (dateStr?: string) => {
   if (!dateStr) return '-';
   const clean = dateStr.split('T')[0];
@@ -103,6 +114,7 @@ export class BprPdfService {
     const totalFilteredRateio = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.rateioAmount ?? c.allocatedAmount) : 0), 0);
     const totalFilteredAdditional = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.additionalAmount || 0) : 0), 0);
     const totalFilteredDistributed = filteredCandidates.reduce((s, c) => s + (c.isEligible ? c.allocatedAmount : 0), 0);
+    const totalFilteredPeriodReceived = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.periodReceivedTotal || 0) : 0), 0);
     const totalFilteredEligible = filteredCandidates.filter(c => c.isEligible).length;
     const totalFilteredIneligible = filteredCandidates.filter(c => !c.isEligible).length;
 
@@ -278,20 +290,28 @@ export class BprPdfService {
     }
 
     // Tabela 2: Relação dos Colaboradores Selecionados
-    const candidateRows = filteredCandidates.map(c => [
-      c.corporateName || c.name,
-      c.company,
-      c.department,
-      c.jobRole,
-      c.camadaLabel,
-      c.linkType,
-      c.monthlyAverageScore !== undefined ? `${c.monthlyAverageScore}%` : '100%',
-      c.performanceFactorLabel || '100%',
-      c.isEligible ? 'Elegível' : 'Inelegível',
-      c.isEligible ? formatCurrency(c.rateioAmount ?? c.allocatedAmount) : 'R$ 0,00',
-      c.isEligible ? formatCurrency(c.additionalAmount || 0) : 'R$ 0,00',
-      c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00'
-    ]);
+    const candidateRows = filteredCandidates.map(c => {
+      const hasHist = (c.periodMonthsCount || 0) > 0 && (c.periodReceivedTotal || 0) > 0;
+      const histCell = hasHist
+        ? `Mont.: ${formatCurrency(c.periodReceivedTotal || 0)}\nMédia (${c.periodMonthsCount}m): ${formatCurrency(c.periodReceivedAverage || 0)}\nBPR: ${formatPctPtBr(c.bprVsAveragePct)} méd. · ${formatPctPtBr(c.bprVsTotalPct)} mont.`
+        : 'Sem histórico';
+
+      return [
+        c.corporateName || c.name,
+        c.company,
+        c.department,
+        c.jobRole,
+        c.camadaLabel,
+        c.linkType,
+        c.monthlyAverageScore !== undefined ? `${c.monthlyAverageScore}%` : '100%',
+        c.performanceFactorLabel || '100%',
+        c.isEligible ? 'Elegível' : 'Inelegível',
+        c.isEligible ? formatCurrency(c.rateioAmount ?? c.allocatedAmount) : 'R$ 0,00',
+        c.isEligible ? formatCurrency(c.additionalAmount || 0) : 'R$ 0,00',
+        c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00',
+        histCell
+      ];
+    });
 
     autoTable(doc, {
       startY: nextY,
@@ -307,7 +327,8 @@ export class BprPdfService {
         'Status',
         'Rateio Nível (R$)',
         '+ Adicional (R$)',
-        'Valor Final (R$)'
+        'Valor Final (R$)',
+        'Histórico Período (Mont. / Média / % BPR)'
       ]],
       body: candidateRows,
       theme: 'striped',
@@ -315,26 +336,27 @@ export class BprPdfService {
         fillColor: [30, 41, 59],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 7,
+        fontSize: 6.5,
         halign: 'left'
       },
       bodyStyles: {
-        fontSize: 7,
+        fontSize: 6.5,
         textColor: [30, 41, 59]
       },
       columnStyles: {
-        0: { cellWidth: 45 },
-        1: { cellWidth: 16 },
-        2: { cellWidth: 26 },
-        3: { cellWidth: 31 },
-        4: { cellWidth: 21 },
-        5: { cellWidth: 14 },
-        6: { cellWidth: 13, halign: 'center' },
-        7: { cellWidth: 17, halign: 'center' },
-        8: { cellWidth: 17, halign: 'center' },
-        9: { cellWidth: 23, halign: 'right' },
-        10: { cellWidth: 21, halign: 'right' },
-        11: { cellWidth: 25, halign: 'right', fontStyle: 'bold' }
+        0: { cellWidth: 36 },
+        1: { cellWidth: 14 },
+        2: { cellWidth: 21 },
+        3: { cellWidth: 24 },
+        4: { cellWidth: 18 },
+        5: { cellWidth: 12 },
+        6: { cellWidth: 12, halign: 'center' },
+        7: { cellWidth: 15, halign: 'center' },
+        8: { cellWidth: 15, halign: 'center' },
+        9: { cellWidth: 20, halign: 'right' },
+        10: { cellWidth: 19, halign: 'right' },
+        11: { cellWidth: 22, halign: 'right', fontStyle: 'bold' },
+        12: { cellWidth: 41, halign: 'right' }
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252]
@@ -345,13 +367,14 @@ export class BprPdfService {
         `${totalFilteredEligible} elegíveis`,
         formatCurrency(totalFilteredRateio),
         formatCurrency(totalFilteredAdditional),
-        formatCurrency(totalFilteredDistributed)
+        formatCurrency(totalFilteredDistributed),
+        totalFilteredPeriodReceived > 0 ? `Mont.: ${formatCurrency(totalFilteredPeriodReceived)}` : '—'
       ]],
       footStyles: {
         fillColor: [241, 245, 249],
         textColor: [15, 23, 42],
         fontStyle: 'bold',
-        fontSize: 8,
+        fontSize: 7,
         halign: 'right'
       },
       margin: { left: 14, right: 14, bottom: 15 },
@@ -364,6 +387,45 @@ export class BprPdfService {
         doc.text(str, 14, doc.internal.pageSize.getHeight() - 6);
       }
     });
+
+    // Notas de Auditoria — Justificativas de Valores Adicionais Individuais
+    const auditAdditionalNotes = filteredCandidates.filter(
+      c => c.isEligible && (c.additionalAmount || 0) > 0 && Boolean((c.additionalReason || '').trim())
+    );
+    if (auditAdditionalNotes.length > 0) {
+      const docWithTable = doc as jsPDF & { lastAutoTable?: { finalY?: number } };
+      const notesStartY = (docWithTable.lastAutoTable?.finalY ?? nextY) + 6;
+      autoTable(doc, {
+        startY: notesStartY,
+        head: [['Notas de Auditoria — Justificativas de Valores Adicionais', 'Empresa', 'Camada', 'Adicional (R$)', 'Motivo / Observação']],
+        body: auditAdditionalNotes.map(c => [
+          c.corporateName || c.name,
+          c.company,
+          c.camadaLabel,
+          formatCurrency(c.additionalAmount || 0),
+          c.additionalReason || ''
+        ]),
+        theme: 'grid',
+        headStyles: {
+          fillColor: [180, 83, 9],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 7
+        },
+        bodyStyles: {
+          fontSize: 7,
+          textColor: [30, 41, 59]
+        },
+        columnStyles: {
+          0: { cellWidth: 55, fontStyle: 'bold' },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 26, halign: 'right', fontStyle: 'bold' },
+          4: { cellWidth: 140 }
+        },
+        margin: { left: 14, right: 14, bottom: 15 }
+      });
+    }
 
     const safeFilename = `Apuracao_BPR_${config.cycle}_${config.year}_${new Date().toISOString().slice(0, 10)}.pdf`;
     doc.save(safeFilename);
@@ -399,8 +461,11 @@ export class BprPdfService {
     const totalFilteredRateio = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.rateioAmount ?? c.allocatedAmount) : 0), 0);
     const totalFilteredAdditional = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.additionalAmount || 0) : 0), 0);
     const totalFilteredDistributed = filteredCandidates.reduce((s, c) => s + (c.isEligible ? c.allocatedAmount : 0), 0);
+    const totalFilteredPeriodReceived = filteredCandidates.reduce((s, c) => s + (c.isEligible ? (c.periodReceivedTotal || 0) : 0), 0);
     const totalFilteredEligible = filteredCandidates.filter(c => c.isEligible).length;
-    const totalFilteredIneligible = filteredCandidates.filter(c => !c.isEligible).length;
+    const auditAdditionalNotes = filteredCandidates.filter(
+      c => c.isEligible && (c.additionalAmount || 0) > 0 && Boolean((c.additionalReason || '').trim())
+    );
 
     const eligLabel = meta?.eligibilityFilter === 'all' 
       ? 'Todos (Elegíveis + Inelegíveis)' 
@@ -718,25 +783,28 @@ export class BprPdfService {
               <th style="text-align: right;">Rateio Nível (R$)</th>
               <th style="text-align: right;">+ Adicional (R$)</th>
               <th style="text-align: right;">Valor Final BPR</th>
+              <th style="text-align: right;">Histórico Período (3 linhas)</th>
             </tr>
           </thead>
           <tbody>
             ${filteredCandidates.length === 0 ? `
               <tr>
-                <td colspan="12" style="text-align: center; padding: 20px; color: #94a3b8;">
+                <td colspan="13" style="text-align: center; padding: 20px; color: #94a3b8;">
                   Nenhum colaborador encontrado para os filtros selecionados neste recorte.
                 </td>
               </tr>
-            ` : filteredCandidates.map(c => `
+            ` : filteredCandidates.map(c => {
+              const hasHist = (c.periodMonthsCount || 0) > 0 && (c.periodReceivedTotal || 0) > 0;
+              return `
               <tr>
-                <td><strong>${c.corporateName || c.name}</strong></td>
-                <td>${c.company}</td>
-                <td>${c.department}</td>
-                <td>${c.jobRole}</td>
-                <td>${c.camadaLabel}</td>
-                <td>${c.linkType}</td>
+                <td><strong>${escapeHtml(c.corporateName || c.name)}</strong></td>
+                <td>${escapeHtml(c.company)}</td>
+                <td>${escapeHtml(c.department)}</td>
+                <td>${escapeHtml(c.jobRole)}</td>
+                <td>${escapeHtml(c.camadaLabel)}</td>
+                <td>${escapeHtml(c.linkType)}</td>
                 <td style="text-align: center;">${c.monthlyAverageScore !== undefined ? `${c.monthlyAverageScore}%` : '100%'}</td>
-                <td style="text-align: center;">${c.performanceFactorLabel || '100%'}</td>
+                <td style="text-align: center;">${escapeHtml(c.performanceFactorLabel || '100%')}</td>
                 <td style="text-align: center;">
                   <span class="${c.isEligible ? 'badge-eligible' : 'badge-ineligible'}">
                     ${c.isEligible ? 'Elegível' : 'Inelegível'}
@@ -751,24 +819,61 @@ export class BprPdfService {
                 <td class="amount-cell" style="color: ${c.isEligible ? '#047857' : '#94a3b8'};">
                   ${c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00'}
                 </td>
+                <td class="amount-cell" style="font-weight: normal; font-size: 8.5px; line-height: 1.3; white-space: nowrap;">
+                  ${hasHist ? `
+                    <div style="font-weight: 800; color: #0f172a;">Mont.: ${formatCurrency(c.periodReceivedTotal || 0)}</div>
+                    <div style="color: #475569;">Média (${c.periodMonthsCount}m): ${formatCurrency(c.periodReceivedAverage || 0)}</div>
+                    <div style="font-weight: 800; color: ${c.isEligible ? '#0369a1' : '#94a3b8'};">BPR: ${formatPctPtBr(c.bprVsAveragePct)} méd. · ${formatPctPtBr(c.bprVsTotalPct)} mont.</div>
+                  ` : '<span style="color: #94a3b8; font-style: italic;">Sem histórico</span>'}
+                </td>
               </tr>
-            `).join('')}
+            `;
+            }).join('')}
           </tbody>
           <tfoot>
             <tr style="background: #f1f5f9; font-weight: 900;">
               <td colspan="9">TOTAL NO RECORTE (${totalFilteredEligible} COLABORADORES ELEGÍVEIS)</td>
-              <td class="amount-cell" style="color: #334155; font-size: 10.5px;">
+              <td class="amount-cell" style="color: #334155; font-size: 10px;">
                 ${formatCurrency(totalFilteredRateio)}
               </td>
-              <td class="amount-cell" style="color: #b45309; font-size: 10.5px;">
+              <td class="amount-cell" style="color: #b45309; font-size: 10px;">
                 ${formatCurrency(totalFilteredAdditional)}
               </td>
-              <td class="amount-cell" style="color: #047857; font-size: 11px;">
+              <td class="amount-cell" style="color: #047857; font-size: 10.5px;">
                 ${formatCurrency(totalFilteredDistributed)}
+              </td>
+              <td class="amount-cell" style="color: #0f172a; font-size: 9.5px;">
+                ${totalFilteredPeriodReceived > 0 ? `Mont.: ${formatCurrency(totalFilteredPeriodReceived)}` : '—'}
               </td>
             </tr>
           </tfoot>
         </table>
+
+        ${auditAdditionalNotes.length > 0 ? `
+          <div class="table-title" style="color: #b45309;">Notas de Auditoria — Justificativas de Valores Adicionais Individuais</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="background: #b45309; border-color: #b45309;">Beneficiário</th>
+                <th style="background: #b45309; border-color: #b45309;">Empresa</th>
+                <th style="background: #b45309; border-color: #b45309;">Camada</th>
+                <th style="background: #b45309; border-color: #b45309; text-align: right;">Adicional (R$)</th>
+                <th style="background: #b45309; border-color: #b45309;">Motivo / Observação Registrada</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${auditAdditionalNotes.map(c => `
+                <tr>
+                  <td><strong>${escapeHtml(c.corporateName || c.name)}</strong></td>
+                  <td>${escapeHtml(c.company)}</td>
+                  <td>${escapeHtml(c.camadaLabel)}</td>
+                  <td class="amount-cell" style="color: #b45309;">${formatCurrency(c.additionalAmount || 0)}</td>
+                  <td>${escapeHtml(c.additionalReason)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : ''}
 
         ${meta?.includeSignatures !== false ? `
           <div class="signatures">

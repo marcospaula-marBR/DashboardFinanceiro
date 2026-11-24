@@ -735,6 +735,26 @@ const vm = require('vm');
 const ts = require('typescript');
 
 function loadRealBprService() {
+  const hrPath = path.resolve(__dirname, '../src/services/people-hr.service.ts');
+  const hrSource = fs.readFileSync(hrPath, 'utf8');
+  const startIdx = hrSource.indexOf('export function calculateRowFinancials');
+  const endIdx = hrSource.indexOf('const _competenciaCache');
+  const hrSlice = hrSource.slice(startIdx, endIdx);
+  const hrTranspiled = ts.transpileModule(hrSlice, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
+  });
+  const hrMod = { exports: {} };
+  vm.runInNewContext(hrTranspiled.outputText, {
+    module: hrMod,
+    exports: hrMod.exports,
+    Math,
+    Number,
+    String,
+    Object,
+    Array,
+    Boolean,
+  });
+
   const filePath = path.resolve(__dirname, '../src/services/bpr.service.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -753,6 +773,7 @@ function loadRealBprService() {
       }
       if (id === '@/types/bpr') return {};
       if (id === '@/lib/supabase') return { supabase: {} };
+      if (id === '@/services/people-hr.service') return hrMod.exports;
       return require(id);
     },
     console,
@@ -765,6 +786,7 @@ function loadRealBprService() {
     Set,
     Map,
     JSON,
+    Boolean,
     parseFloat,
     parseInt,
     isNaN,
@@ -853,5 +875,87 @@ assert.strictEqual(o2Res.allocatedAmount, 0);
 assert.strictEqual(resIneligible.netPoolForLayers, 100000);
 
 console.log('   ✅ Regras de Valor Adicional por colaborador (Total Rateado, Camada Específica, Própria Camada, Redução Manual e Inelegível) validadas com precisão centavo a centavo!');
+
+// 18. Testando Justificativa de Adicional + Histórico Recebido no Período (Montante, Média e % Equivalente BPR)
+console.log('\n18. Testando Motivo de Adicional e Histórico Financeiro do People no Período BPR...');
+const mockEmployeesForHist = [
+  { id: 'emp-clt', name: 'Ana CLT', company: 'MarBR', department: 'Ops', job_role: 'Analista', linkType: 'CLT', camada: 'O', status: 'Ativo', start_date: '2025-01-01' },
+  { id: 'emp-pj', name: 'Carlos PJ', corporate_name: 'CARLOS CONSULTORIA LTDA', company: 'DZM', department: 'TI', job_role: 'Tech Lead', linkType: 'PJ', camada: 'T', status: 'Ativo', start_date: '2025-01-01' },
+  { id: 'emp-sem-hist', name: 'Bruno Sem Histórico', company: 'MarBR', department: 'Dir', job_role: 'Diretor', linkType: 'PJ', camada: 'E', status: 'Ativo', start_date: '2025-01-01' },
+  { id: 'emp-ineleg', name: 'Diego Inelegivel', company: 'MarBR', department: 'Ops', job_role: 'Assistente', linkType: 'CLT', camada: 'O', status: 'Inativo', start_date: '2025-01-01', resignation_date: '2026-04-15' },
+];
+
+const mockMonthlyCostsForHist = [
+  // Ana CLT: 3 meses dentro do 1º Semestre 2026 (R$ 4.000, R$ 5.000, R$ 6.000 -> Montante R$ 15.000, Média R$ 5.000) + 1 mês fora do período (2026-07) que deve ser ignorado
+  { employee_id: 'emp-clt', competencia: '2026-01-01', vinculo_tipo: 'CLT', valor_holerite: 4000, valor_descontos: 500, valor_vt: 200, valor_cesta: 300 }, // realTotal = 3500 + 500 = 4000
+  { employee_id: 'emp-clt', competencia: '2026-02-01', vinculo_tipo: 'CLT', valor_holerite: 5000, valor_descontos: 500, valor_vt: 200, valor_cesta: 300 }, // realTotal = 5000
+  { employee_id: 'emp-clt', competencia: '2026-03-01', vinculo_tipo: 'CLT', valor_holerite: 6000, valor_descontos: 500, valor_vt: 200, valor_cesta: 300 }, // realTotal = 6000
+  { employee_id: 'emp-clt', competencia: '2026-07-01', vinculo_tipo: 'CLT', valor_holerite: 9999, valor_descontos: 0 }, // Fora de 01/01 a 30/06 -> IGNORAR
+  // Carlos PJ: 2 meses no período (R$ 10.000 cada -> Montante R$ 20.000, Média R$ 10.000) + 1 mês de 2025-12 que deve ser ignorado
+  { employee_id: 'emp-pj', competencia: '2025-12-01', vinculo_tipo: 'MEI', valor_fixo: 8000 }, // Fora -> IGNORAR
+  { employee_id: 'emp-pj', competencia: '2026-01-01', vinculo_tipo: 'MEI', valor_fixo: 9500, valor_ajuda_custo: 500 }, // realTotal = 10000
+  { employee_id: 'emp-pj', competencia: '2026-02-01', vinculo_tipo: 'MEI', valor_fixo: 10000 }, // realTotal = 10000
+  // Diego Inelegível: tem histórico de R$ 3.000 em 2026-01, mas como é inelegível, % BPR = 0%
+  { employee_id: 'emp-ineleg', competencia: '2026-01-01', vinculo_tipo: 'CLT', valor_holerite: 3000, valor_descontos: 0 },
+];
+
+const cfgHist = {
+  ...RealBprService.getDefaultConfig('ciclo_1', 2026),
+  periodStartDate: '2026-01-01',
+  periodEndDate: '2026-06-30',
+  paymentDate: '2026-09-30',
+  totalPoolAmount: 50000,
+  splitMode: 'percentage',
+  tierSplits: { E: 40, T: 40, O: 20 }, // E=20k, T=20k, O=10k (antes de adicionais)
+  additionalDeductionSource: 'E',
+  additionalAmounts: { 'emp-clt': 2500, 'emp-ineleg': 1000 },
+  additionalReasons: { 'emp-clt': 'Entrega Extra Projeto X', 'emp-ineleg': 'Não deve aparecer' },
+};
+
+const resHist = RealBprService.calculateBpr(mockEmployeesForHist, mockMonthlyCostsForHist, cfgHist);
+
+// Ana CLT: Rateio O = R$ 10.000 + Adicional R$ 2.500 = R$ 12.500; Montante = R$ 15.000; Média (3m) = R$ 5.000
+// % Média = 12500 / 5000 = 250.0%; % Montante = 12500 / 15000 = 83.3%
+const anaRes = resHist.candidates.find(c => c.employeeId === 'emp-clt');
+assert.strictEqual(anaRes.allocatedAmount, 12500);
+assert.strictEqual(anaRes.additionalAmount, 2500);
+assert.strictEqual(anaRes.additionalReason, 'Entrega Extra Projeto X');
+assert.strictEqual(anaRes.periodMonthsCount, 3);
+assert.strictEqual(anaRes.periodReceivedTotal, 15000);
+assert.strictEqual(anaRes.periodReceivedAverage, 5000);
+assert.strictEqual(anaRes.bprVsAveragePct, 250);
+assert.strictEqual(anaRes.bprVsTotalPct, 83.3);
+
+// Carlos PJ: Rateio T = R$ 20.000; Montante = R$ 20.000; Média (2m) = R$ 10.000 -> 200.0% média e 100.0% montante
+const carlosRes = resHist.candidates.find(c => c.employeeId === 'emp-pj');
+assert.strictEqual(carlosRes.allocatedAmount, 20000);
+assert.strictEqual(carlosRes.periodMonthsCount, 2);
+assert.strictEqual(carlosRes.periodReceivedTotal, 20000);
+assert.strictEqual(carlosRes.periodReceivedAverage, 10000);
+assert.strictEqual(carlosRes.bprVsAveragePct, 200);
+assert.strictEqual(carlosRes.bprVsTotalPct, 100);
+
+// Bruno Sem Histórico: sem divisão por zero / NaN
+const brunoSemHist = resHist.candidates.find(c => c.employeeId === 'emp-sem-hist');
+assert.strictEqual(brunoSemHist.periodMonthsCount, 0);
+assert.strictEqual(brunoSemHist.periodReceivedTotal, 0);
+assert.strictEqual(brunoSemHist.periodReceivedAverage, 0);
+assert.strictEqual(brunoSemHist.bprVsAveragePct, 0);
+assert.strictEqual(brunoSemHist.bprVsTotalPct, 0);
+
+// Diego Inelegível: preserva histórico, mas adicional, justificativa e % BPR = 0/undefined
+const diegoRes = resHist.candidates.find(c => c.employeeId === 'emp-ineleg');
+assert.strictEqual(diegoRes.isEligible, false);
+assert.strictEqual(diegoRes.periodReceivedTotal, 3000);
+assert.strictEqual(diegoRes.periodReceivedAverage, 3000);
+assert.strictEqual(diegoRes.additionalAmount, 0);
+assert.strictEqual(diegoRes.additionalReason, undefined);
+assert.strictEqual(diegoRes.bprVsAveragePct, 0);
+assert.strictEqual(diegoRes.bprVsTotalPct, 0);
+
+// Total histórico consolidado dos elegíveis = 15.000 + 20.000 + 0 = 35.000
+assert.strictEqual(resHist.totalPeriodReceivedAmount, 35000);
+
+console.log('   ✅ Motivo/justificativa do adicional e comparativo histórico do período (Montante, Média, % Média e % Montante) validados com 100% de precisão!');
 
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');
