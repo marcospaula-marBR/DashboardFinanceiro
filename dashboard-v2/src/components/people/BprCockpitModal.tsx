@@ -2193,15 +2193,38 @@ export function BprCockpitModal({
                         {(summary.dedicatedGroupSummaries || []).map(gs => (
                           <div
                             key={gs.groupId}
-                            className="bg-teal-50/70 border border-teal-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2"
+                            className="bg-teal-50/70 border border-teal-200 rounded-xl px-3 py-2 flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-2"
                           >
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <strong className="text-xs font-black text-teal-900 block truncate">
                                 {gs.name}
                               </strong>
                               <span className="text-[11px] text-teal-700 font-semibold block truncate">
                                 {gs.memberCount} eleg.{gs.ineligibleMemberCount ? ` (+${gs.ineligibleMemberCount} inel.)` : ''} · {formatDedicatedModeLabel(gs.distributionMode)} · {formatDedicatedFundingLabel(gs.fundingSource)}
                               </span>
+                              {((gs.tierPartialCount || 0) > 0 || (gs.tierZeroCount || 0) > 0) && (
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px] font-bold">
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    {gs.tierFullCount ?? 0} em 100%
+                                  </span>
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                    {gs.tierPartialCount ?? 0} em 90–99%
+                                  </span>
+                                  <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                                    {gs.tierZeroCount ?? 0} &lt;90%
+                                  </span>
+                                  {(gs.redistributedStep1Amount || 0) > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-mono">
+                                      Et.1: {formatCurrency(gs.redistributedStep1Amount || 0)}
+                                    </span>
+                                  )}
+                                  {(gs.redistributedStep2Amount || 0) > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-900 border border-teal-200 font-mono">
+                                      Et.2: {formatCurrency(gs.redistributedStep2Amount || 0)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="text-right shrink-0 font-mono">
                               <strong className="text-xs font-black text-teal-900 block">
@@ -4961,6 +4984,7 @@ export function BprCockpitModal({
                   );
                   const groupSummary = (summary.dedicatedGroupSummaries || []).find(s => s.groupId === group.id);
                   const impactPreview = groupImpactPreviewMap.get(group.id);
+                  const liveGroupSummary = impactPreview?.groupSummary ?? groupSummary;
                   const searchTerm = dedicatedMemberSearchByGroup[group.id] || '';
                   const roleFilter = dedicatedRoleFilterByGroup[group.id] || '';
                   const camadaPickFilter = dedicatedCamadaFilterByGroup[group.id] || '';
@@ -5299,9 +5323,47 @@ export function BprCockpitModal({
                                       </span>
                                     )}
                                   </div>
-                                  {(impactPreview.groupSummary.redistributedAmount || 0) > 0 && (
-                                    <div className="text-[11px] text-teal-800 font-sans font-semibold">
-                                      Redistribuído por fator: {formatCurrency(impactPreview.groupSummary.redistributedAmount || 0)}
+                                  {(impactPreview.groupSummary.eligibleMemberCount ?? impactPreview.groupSummary.memberCount) > 0 && (
+                                    <div className="flex flex-wrap items-center gap-1.5 pt-1 font-sans">
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        100%: {impactPreview.groupSummary.tierFullCount ?? 0}
+                                      </span>
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                        90%–99%: {impactPreview.groupSummary.tierPartialCount ?? 0}
+                                      </span>
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                                        &lt;90%: {impactPreview.groupSummary.tierZeroCount ?? 0}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {((impactPreview.groupSummary.redistributedStep1Amount || 0) > 0 ||
+                                    (impactPreview.groupSummary.redistributedStep2Amount || 0) > 0 ||
+                                    (impactPreview.groupSummary.residualAmount || 0) > 0.005) && (
+                                    <div className="flex flex-wrap items-center gap-1.5 pt-1 font-sans">
+                                      {(impactPreview.groupSummary.redistributedStep1Amount || 0) > 0 && (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
+                                          Etapa 1 (&lt;90% → ≥90%):{' '}
+                                          <span className="font-mono">
+                                            {formatCurrency(impactPreview.groupSummary.redistributedStep1Amount || 0)}
+                                          </span>
+                                        </span>
+                                      )}
+                                      {(impactPreview.groupSummary.redistributedStep2Amount || 0) > 0 && (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                          Etapa 2 (90%–99% → 100%):{' '}
+                                          <span className="font-mono">
+                                            {formatCurrency(impactPreview.groupSummary.redistributedStep2Amount || 0)}
+                                          </span>
+                                        </span>
+                                      )}
+                                      {(impactPreview.groupSummary.residualAmount || 0) > 0.005 && (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200">
+                                          Saldo residual:{' '}
+                                          <span className="font-mono">
+                                            {formatCurrency(impactPreview.groupSummary.residualAmount)}
+                                          </span>
+                                        </span>
+                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -5352,9 +5414,9 @@ export function BprCockpitModal({
                                 </button>
                               </>
                             )}
-                            {groupSummary && (
+                            {liveGroupSummary && (
                               <span className="text-xs font-black font-mono text-teal-900 bg-white border border-teal-200 px-2.5 py-0.5 rounded-full">
-                                Alocado: {formatCurrency(groupSummary.allocatedTotal)}
+                                Alocado: {formatCurrency(liveGroupSummary.allocatedTotal)}
                               </span>
                             )}
                           </div>

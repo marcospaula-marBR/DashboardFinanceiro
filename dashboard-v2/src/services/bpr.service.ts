@@ -668,6 +668,12 @@ export class BprService {
           }
         }
 
+        const tierFullCount = prepared.filter(it => it.tier === 'full').length;
+        const tierPartialCount = prepared.filter(it => it.tier === 'partial').length;
+        const tierZeroCount = prepared.filter(it => it.tier === 'zero').length;
+        const redistributedStep1Amount = round2(step1Items.reduce((acc, it) => acc + it.redistStep1, 0));
+        const redistributedStep2Amount = round2(afterFactorItems.reduce((acc, it) => acc + it.redistStep2, 0));
+
         let redistributedAmount = 0;
         let groupAllocated = 0;
         afterFactorItems.forEach(item => {
@@ -749,6 +755,11 @@ export class BprService {
           reducedFactorPct,
           redistributePerformanceResidual: shouldRedistribute,
           redistributedAmount,
+          tierFullCount,
+          tierPartialCount,
+          tierZeroCount,
+          redistributedStep1Amount,
+          redistributedStep2Amount,
           residualAmount: groupResidual,
         });
       });

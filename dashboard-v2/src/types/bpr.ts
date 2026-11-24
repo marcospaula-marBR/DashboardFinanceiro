@@ -51,6 +51,11 @@ export interface BprDedicatedGroupSummary {
   reducedFactorPct?: number;
   redistributePerformanceResidual?: boolean;
   redistributedAmount?: number;
+  tierFullCount?: number;
+  tierPartialCount?: number;
+  tierZeroCount?: number;
+  redistributedStep1Amount?: number;
+  redistributedStep2Amount?: number;
   residualAmount: number;
 }
 
