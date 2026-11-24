@@ -4,7 +4,7 @@ export type BprCamada = 'E' | 'T' | 'O'; // Estratégico, Tático, Operacional
 
 export type BprSplitMode = 'percentage' | 'amount'; // Rateio por % ou por Valor R$ Fixo
 
-export type BprAdditionalDeductionSource = 'total_pool' | 'own_layer' | BprCamada;
+export type BprAdditionalDeductionSource = 'total_pool' | 'own_layer' | BprCamada | 'extra_bonus';
 
 export interface BprTierSplit {
   E: number; // % Estratégico (ex: 30)
@@ -139,8 +139,28 @@ export interface BprLayerSummary {
   bprVsPeriodTotalPct?: number;
 }
 
+export interface BprTargetMultipleLayerProjection {
+  camada: BprCamada;
+  label: string;
+  targetMultiple: number;
+  eligibleCount: number;
+  eligibleWithHistoryCount: number;
+  monthlyAverageBase: number;
+  requiredAmountPerEligible: number;
+  requiredLayerAmount: number;
+  equivalentPercentage: number;
+}
+
+export interface BprTargetMultipleSimulation {
+  totalRequiredPool: number;
+  layers: Record<BprCamada, BprTargetMultipleLayerProjection>;
+  hasAnyHistory: boolean;
+}
+
 export interface BprCalculationSummary {
   totalPoolAmount: number;
+  basePoolAmount?: number;            // R$ montante base dos níveis antes de eventual acréscimo de bônus extra
+  extraBonusAmount?: number;          // R$ soma de adicionais tratados como acréscimo de bônus (sem abatimento)
   totalAdditionalAmount?: number;     // R$ soma de todos os valores adicionais dos elegíveis
   netPoolForLayers?: number;          // R$ saldo líquido efetivamente rateado entre as camadas E, T e O
   totalPeriodReceivedAmount?: number; // R$ soma dos montantes históricos recebidos pelos elegíveis no período
@@ -166,6 +186,8 @@ export interface BprSavedScenario {
   config: BprRuleConfig;       // Configurações do simulador
   summary: {
     totalPoolAmount: number;
+    basePoolAmount?: number;
+    extraBonusAmount?: number;
     totalAdditionalAmount?: number;
     netPoolForLayers?: number;
     totalPeriodReceivedAmount?: number;

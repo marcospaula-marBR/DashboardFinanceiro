@@ -1022,4 +1022,88 @@ assert.strictEqual(resHist.overallRelativeWeight.bprMultipleOfMonthlyAvg, 2.17);
 
 console.log('   ✅ Peso Relativo do BPR (% Média Mensal e Múltiplos) por Camada (E/T/O) e Consolidado Geral validados sem distorção!');
 
+// 20. Testando Acréscimo de Bônus (extra_bonus), Simulador de Meta por Múltiplo (x) e Filtro por Nome
+console.log('\n20. Testando Acréscimo de Bônus (extra_bonus), Simulador de Meta por Múltiplo (x) e Filtro por Nome...');
+
+// 20A. Modo extra_bonus: não desconta das camadas, soma como acréscimo de bônus ao total
+const cfgExtraBonus = {
+  ...RealBprService.getDefaultConfig('ciclo_1', 2026),
+  totalPoolAmount: 100000,
+  splitMode: 'percentage',
+  tierSplits: { E: 30, T: 40, O: 30 },
+  additionalDeductionSource: 'extra_bonus',
+  additionalAmounts: { o1: 10000 },
+  additionalReasons: { o1: 'Bônus extraordinário diretoria' },
+};
+const resExtraBonus = RealBprService.recalculateSnapshotWithNewConfig(baseCandidatesForAdd, cfgExtraBonus);
+assert.strictEqual(resExtraBonus.basePoolAmount, 100000);
+assert.strictEqual(resExtraBonus.extraBonusAmount, 10000);
+assert.strictEqual(resExtraBonus.totalPoolAmount, 110000);
+assert.strictEqual(resExtraBonus.netPoolForLayers, 100000);
+assert.strictEqual(resExtraBonus.layers.E.totalLayerAmount, 30000);
+assert.strictEqual(resExtraBonus.layers.T.totalLayerAmount, 40000);
+assert.strictEqual(resExtraBonus.layers.O.totalLayerAmount, 30000);
+assert.strictEqual(resExtraBonus.layers.E.additionalDeductedFromLayer, 0);
+assert.strictEqual(resExtraBonus.layers.T.additionalDeductedFromLayer, 0);
+assert.strictEqual(resExtraBonus.layers.O.additionalDeductedFromLayer, 0);
+const o1Extra = resExtraBonus.candidates.find(c => c.employeeId === 'o1');
+assert.strictEqual(o1Extra.rateioAmount, 30000);
+assert.strictEqual(o1Extra.additionalAmount, 10000);
+assert.strictEqual(o1Extra.allocatedAmount, 40000);
+assert.strictEqual(resExtraBonus.totalDistributedAmount, 110000);
+assert.strictEqual(resExtraBonus.residualAmount, 0);
+
+// 20B. Simulador de Meta por Múltiplo Salarial (x)
+const candidatesForTargetSim = [
+  { employeeId: 's-e1', name: 'Dir', camada: 'E', isEligible: true, performanceFactor: 1.0, periodReceivedAverage: 20000, periodReceivedTotal: 120000 },
+  { employeeId: 's-t1', name: 'Ger 100%', camada: 'T', isEligible: true, performanceFactor: 1.0, periodReceivedAverage: 10000, periodReceivedTotal: 60000 },
+  { employeeId: 's-t2', name: 'Ger 75%', camada: 'T', isEligible: true, performanceFactor: 0.75, periodReceivedAverage: 10000, periodReceivedTotal: 60000 },
+  { employeeId: 's-o1', name: 'Op Com Hist', camada: 'O', isEligible: true, performanceFactor: 1.0, periodReceivedAverage: 4000, periodReceivedTotal: 24000 },
+  { employeeId: 's-o2', name: 'Op Sem Hist', camada: 'O', isEligible: true, performanceFactor: 1.0, periodReceivedAverage: 0, periodReceivedTotal: 0 },
+];
+const simProj = RealBprService.simulatePoolFromTargetMultiples(candidatesForTargetSim, { E: 2.0, T: 1.5, O: 1.0 });
+assert.strictEqual(simProj.hasAnyHistory, true);
+assert.strictEqual(simProj.layers.E.requiredAmountPerEligible, 40000);
+assert.strictEqual(simProj.layers.E.requiredLayerAmount, 40000);
+// T: (1.5 * 20000) / 1.75 = 17142.86 por elegível; * 2 elegíveis = 34285.72
+assert.strictEqual(simProj.layers.T.requiredAmountPerEligible, 17142.86);
+assert.strictEqual(simProj.layers.T.requiredLayerAmount, 34285.72);
+// O: 1 com histórico (4k) * 1.0x = 4000 por elegível; * 2 elegíveis = 8000
+assert.strictEqual(simProj.layers.O.requiredAmountPerEligible, 4000);
+assert.strictEqual(simProj.layers.O.requiredLayerAmount, 8000);
+assert.strictEqual(simProj.totalRequiredPool, 82285.72);
+assert.strictEqual(
+  simProj.layers.E.equivalentPercentage + simProj.layers.T.equivalentPercentage + simProj.layers.O.equivalentPercentage,
+  100
+);
+
+// Caso sem histórico no simulador de meta
+const emptySim = RealBprService.simulatePoolFromTargetMultiples(
+  [{ employeeId: 'x', name: 'Sem Hist', camada: 'O', isEligible: true, performanceFactor: 1.0, periodReceivedAverage: 0 }],
+  { E: 2, T: 1.5, O: 1 }
+);
+assert.strictEqual(emptySim.hasAnyHistory, false);
+assert.strictEqual(emptySim.totalRequiredPool, 0);
+
+// 20C. Filtro por nome sem acentos e múltiplos nomes (incluindo responsibleName de PJ)
+const normalizeNameTest = (str) => String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const listForNameFilter = [
+  { employeeId: 'n1', name: 'João Pedro', corporateName: 'JP SERVICOS LTDA', responsibleName: 'João Pedro Silva', isEligible: true },
+  { employeeId: 'n2', name: 'Maria José', corporateName: undefined, responsibleName: undefined, isEligible: true },
+  { employeeId: 'n3', name: 'ACME TECH', corporateName: 'ACME TECH LTDA', responsibleName: 'Sérgio Mendes', isEligible: true },
+];
+const filterByNameTokens = (list, query) => {
+  const tokens = String(query || '').split(',').map(t => normalizeNameTest(t)).filter(Boolean);
+  if (tokens.length === 0) return list;
+  return list.filter(c => {
+    const h = normalizeNameTest(`${c.name} ${c.corporateName || ''} ${c.responsibleName || ''}`);
+    return tokens.some(tk => h.includes(tk));
+  });
+};
+assert.strictEqual(filterByNameTokens(listForNameFilter, 'joao').length, 1);
+assert.strictEqual(filterByNameTokens(listForNameFilter, 'sergio').length, 1); // encontra pelo responsibleName da PJ!
+assert.strictEqual(filterByNameTokens(listForNameFilter, 'joao, maria').length, 2); // múltiplos nomes separados por vírgula
+
+console.log('   ✅ Modo Acréscimo de Bônus (extra_bonus), Simulador de Meta por Múltiplo (x) e Filtro por Nome validados com 100% de precisão!');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

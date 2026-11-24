@@ -55,6 +55,13 @@ const formatDatePtBr = (dateStr?: string) => {
   return clean;
 };
 
+const normalizeSearchText = (str?: string) =>
+  String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
 export interface BprPdfMeta {
   scenarioName?: string;
   studyDate?: string;
@@ -63,6 +70,7 @@ export interface BprPdfMeta {
   eligibilityFilter?: 'all' | 'eligible_only' | 'ineligible_only';
   selectedCamadas?: BprCamada[];
   selectedCompanies?: string[];
+  nameQuery?: string;
   includeSummaryCards?: boolean;
   includeLayerSummary?: boolean;
   includeSignatures?: boolean;
@@ -90,6 +98,10 @@ export class BprPdfService {
     const eligibilityFilter = meta?.eligibilityFilter || 'eligible_only';
     const selectedCamadas = meta?.selectedCamadas || ['E', 'T', 'O'];
     const selectedCompanies = (meta?.selectedCompanies || []).map(c => c.trim().toLowerCase());
+    const nameTokens = String(meta?.nameQuery || '')
+      .split(',')
+      .map(t => normalizeSearchText(t))
+      .filter(Boolean);
 
     return candidates.filter(c => {
       // 1. Filtro de Elegibilidade
@@ -103,6 +115,13 @@ export class BprPdfService {
       if (selectedCompanies.length > 0) {
         const comp = (c.company || '').trim().toLowerCase();
         if (!selectedCompanies.includes(comp)) return false;
+      }
+
+      // 4. Filtro por Nome (sem acentos; suporta múltiplos nomes separados por vírgula)
+      if (nameTokens.length > 0) {
+        const haystack = normalizeSearchText(`${c.name} ${c.corporateName || ''} ${c.responsibleName || ''}`);
+        const matchesAny = nameTokens.some(token => haystack.includes(token));
+        if (!matchesAny) return false;
       }
 
       return true;
@@ -191,13 +210,14 @@ export class BprPdfService {
         : 'Apenas Colaboradores Elegíveis';
     const camadasLabel = (meta?.selectedCamadas || ['E', 'T', 'O']).map(c => c === 'E' ? 'Estratégico' : c === 'T' ? 'Tático' : 'Operacional').join(', ');
     const compsLabel = (meta?.selectedCompanies && meta.selectedCompanies.length > 0) ? meta.selectedCompanies.join(', ') : 'Todas';
+    const nameLabel = meta?.nameQuery?.trim() ? `  •  Nome: "${meta.nameQuery.trim()}"` : '';
 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(5, 150, 105);
     doc.text(`RECORTE DESTE RELATÓRIO:`, 18, 44);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(30, 41, 59);
-    doc.text(`${eligLabel}  •  Camadas: ${camadasLabel}  •  Empresas: ${compsLabel}  •  Total no Recorte: ${filteredCandidates.length}`, 65, 44);
+    doc.text(`${eligLabel}  •  Camadas: ${camadasLabel}  •  Empresas: ${compsLabel}${nameLabel}  •  Total no Recorte: ${filteredCandidates.length}`, 65, 44);
 
     let nextY = 50;
 
@@ -724,7 +744,7 @@ export class BprPdfService {
         <!-- Escopo do Recorte Selecionado -->
         <div class="scope-banner">
           <div>
-            <strong>RECORTE DO RELATÓRIO:</strong> ${eligLabel} • Camadas: ${camadasLabel} • Empresas: ${compsLabel}
+            <strong>RECORTE DO RELATÓRIO:</strong> ${eligLabel} • Camadas: ${camadasLabel} • Empresas: ${compsLabel}${meta?.nameQuery?.trim() ? ` • Nome: "${escapeHtml(meta.nameQuery.trim())}"` : ''}
           </div>
           <div style="font-weight: 800;">
             ${filteredCandidates.length} colaborador(es) listado(s)

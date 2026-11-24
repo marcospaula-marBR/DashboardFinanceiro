@@ -45,6 +45,11 @@ export function BprCockpitModal({
   const [statusFilter, setStatusFilter] = useState<'all' | 'eligible' | 'ineligible'>('eligible');
   const [camadaFilter, setCamadaFilter] = useState<'all' | BprCamada>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEmployeeIdFilter, setSelectedEmployeeIdFilter] = useState<string>('');
+
+  // Simulador de Meta por Múltiplo Salarial por Camada (x)
+  const [isTargetMultiplePanelOpen, setIsTargetMultiplePanelOpen] = useState(false);
+  const [targetMultiples, setTargetMultiples] = useState<Record<BprCamada, number>>({ E: 2.0, T: 1.5, O: 1.0 });
   
   // Modais de Exceções Nominais
   const [isGlosadosModalOpen, setIsGlosadosModalOpen] = useState(false);
@@ -71,6 +76,7 @@ export function BprCockpitModal({
   const [exportEligibility, setExportEligibility] = useState<'eligible_only' | 'ineligible_only' | 'all'>('eligible_only');
   const [exportSelectedCamadas, setExportSelectedCamadas] = useState<BprCamada[]>(['E', 'T', 'O']);
   const [exportSelectedCompanies, setExportSelectedCompanies] = useState<string[]>([]);
+  const [exportNameQuery, setExportNameQuery] = useState('');
   const [exportIncludeSummaryCards, setExportIncludeSummaryCards] = useState(true);
   const [exportIncludeLayerSummary, setExportIncludeLayerSummary] = useState(true);
   const [exportIncludeSignatures, setExportIncludeSignatures] = useState(true);
@@ -161,7 +167,7 @@ export function BprCockpitModal({
     ? (summary.totalPoolAmount > 0)
     : (
         totalSplitPercent === 100 ||
-        (totalSplitPercent < 100 && totalAdditionalAmount > 0 && Math.abs(manualPercentReductionAmount - totalAdditionalAmount) <= 1.0)
+        (config.additionalDeductionSource !== 'extra_bonus' && totalSplitPercent < 100 && totalAdditionalAmount > 0 && Math.abs(manualPercentReductionAmount - totalAdditionalAmount) <= 1.0)
       );
 
   // Atualização de Valor Adicional por Colaborador
@@ -248,23 +254,83 @@ export function BprCockpitModal({
     });
   };
 
+  // Normalização sem acentos para busca precisa por nome
+  const normalizeSearchText = (str?: string) =>
+    String(str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  // Projeção Reativa do Simulador de Meta por Múltiplo Salarial (x)
+  const targetMultipleSimulation = useMemo(() => {
+    return BprService.simulatePoolFromTargetMultiples(summary.candidates, targetMultiples);
+  }, [summary.candidates, targetMultiples]);
+
+  const handleLoadCurrentMultiplesToSimulator = () => {
+    setTargetMultiples({
+      E: summary.layers.E.bprMultipleOfMonthlyAvg || 2.0,
+      T: summary.layers.T.bprMultipleOfMonthlyAvg || 1.5,
+      O: summary.layers.O.bprMultipleOfMonthlyAvg || 1.0,
+    });
+  };
+
+  const handleApplyTargetMultipleSimulation = () => {
+    if (targetMultipleSimulation.totalRequiredPool <= 0) return;
+    setConfig(prev => ({
+      ...prev,
+      splitMode: 'amount',
+      totalPoolAmount: targetMultipleSimulation.totalRequiredPool,
+      tierAmounts: {
+        E: targetMultipleSimulation.layers.E.requiredLayerAmount,
+        T: targetMultipleSimulation.layers.T.requiredLayerAmount,
+        O: targetMultipleSimulation.layers.O.requiredLayerAmount,
+      },
+      tierSplits: {
+        E: targetMultipleSimulation.layers.E.equivalentPercentage,
+        T: targetMultipleSimulation.layers.T.equivalentPercentage,
+        O: targetMultipleSimulation.layers.O.equivalentPercentage,
+      }
+    }));
+  };
+
+  // Lista alfabética de nomes disponíveis para o dropdown "Filtrar por Nome"
+  const availableCandidateNames = useMemo(() => {
+    return summary.candidates
+      .filter(c => {
+        if (statusFilter === 'eligible' && !c.isEligible) return false;
+        if (statusFilter === 'ineligible' && c.isEligible) return false;
+        if (camadaFilter !== 'all' && c.camada !== camadaFilter) return false;
+        return true;
+      })
+      .map(c => {
+        const isPJ = c.linkType === 'PJ' || c.linkType === 'MEI' || Boolean(c.corporateName);
+        const primary = isPJ ? (c.corporateName || c.name) : c.name;
+        const resp = isPJ && c.responsibleName && c.responsibleName !== primary ? ` (${c.responsibleName})` : '';
+        return { id: c.employeeId, label: `${primary}${resp}` };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  }, [summary.candidates, statusFilter, camadaFilter]);
+
   // Filtragem da Lista para Exibição
   const displayedCandidates = useMemo(() => {
+    const q = normalizeSearchText(searchQuery);
     return summary.candidates.filter(c => {
       if (statusFilter === 'eligible' && !c.isEligible) return false;
       if (statusFilter === 'ineligible' && c.isEligible) return false;
       if (camadaFilter !== 'all' && c.camada !== camadaFilter) return false;
+      if (selectedEmployeeIdFilter && c.employeeId !== selectedEmployeeIdFilter) return false;
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = c.name.toLowerCase().includes(q) || (c.corporateName || '').toLowerCase().includes(q);
-        const matchesRole = (c.jobRole || '').toLowerCase().includes(q) || (c.department || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesRole) return false;
+      if (q) {
+        const haystack = normalizeSearchText(
+          `${c.name} ${c.corporateName || ''} ${c.responsibleName || ''} ${c.jobRole || ''} ${c.department || ''}`
+        );
+        if (!haystack.includes(q)) return false;
       }
 
       return true;
     });
-  }, [summary.candidates, statusFilter, camadaFilter, searchQuery]);
+  }, [summary.candidates, statusFilter, camadaFilter, selectedEmployeeIdFilter, searchQuery]);
 
   // Resumo Dinâmico dos Critérios Ativos
   const generateCurrentCriteriaSummary = () => {
@@ -281,14 +347,15 @@ export function BprCockpitModal({
     const empresasDesc = config.companiesFilter.length > 0 ? `Empresas: ${config.companiesFilter.join(', ')}` : 'Todas as empresas';
     const vinculosDesc = config.linkTypesFilter.length > 0 ? `Vínculos: ${config.linkTypesFilter.join(', ')}` : 'Todos os regimes (CLT, PJ, etc.)';
     const sourceLabelMap: Record<string, string> = {
-      total_pool: 'Total Rateado',
-      own_layer: 'Própria Camada',
-      E: 'Camada Estratégico (E)',
-      T: 'Camada Tático (T)',
-      O: 'Camada Operacional (O)',
+      total_pool: 'Abatido do Total Rateado',
+      own_layer: 'Abatido da Própria Camada',
+      E: 'Abatido da Camada Estratégico (E)',
+      T: 'Abatido da Camada Tático (T)',
+      O: 'Abatido da Camada Operacional (O)',
+      extra_bonus: 'Acréscimo de Bônus ao Total (Sem Abatimento)',
     };
     const addDesc = (summary.totalAdditionalAmount || 0) > 0
-      ? ` | Adicionais Individuais: R$ ${(summary.totalAdditionalAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (Abatido de: ${sourceLabelMap[config.additionalDeductionSource || 'total_pool']})`
+      ? ` | Adicionais Individuais: R$ ${(summary.totalAdditionalAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${sourceLabelMap[config.additionalDeductionSource || 'total_pool']})`
       : '';
 
     return `Ciclo ${cycleLabel} ${config.year} | Montante R$ ${summary.totalPoolAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ${splitDesc}${addDesc} | ${glosaDesc} | ${inativoDesc} | ${empresasDesc} | ${vinculosDesc}`;
@@ -319,6 +386,8 @@ export function BprCockpitModal({
       config: JSON.parse(JSON.stringify(config)),
       summary: {
         totalPoolAmount: summary.totalPoolAmount,
+        basePoolAmount: summary.basePoolAmount,
+        extraBonusAmount: summary.extraBonusAmount,
         totalAdditionalAmount: summary.totalAdditionalAmount,
         netPoolForLayers: summary.netPoolForLayers,
         totalPeriodReceivedAmount: summary.totalPeriodReceivedAmount,
@@ -456,6 +525,7 @@ export function BprCockpitModal({
     setExportEligibility('eligible_only');
     setExportSelectedCamadas(['E', 'T', 'O']);
     setExportSelectedCompanies([]);
+    setExportNameQuery('');
     setExportIncludeSummaryCards(true);
     setExportIncludeLayerSummary(true);
     setExportIncludeSignatures(true);
@@ -471,6 +541,7 @@ export function BprCockpitModal({
       eligibilityFilter: exportEligibility,
       selectedCamadas: exportSelectedCamadas,
       selectedCompanies: exportSelectedCompanies,
+      nameQuery: exportNameQuery.trim() || undefined,
       includeSummaryCards: exportIncludeSummaryCards,
       includeLayerSummary: exportIncludeLayerSummary,
       includeSignatures: exportIncludeSignatures
@@ -491,9 +562,10 @@ export function BprCockpitModal({
     return BprPdfService.filterCandidates(targetCandidates, {
       eligibilityFilter: exportEligibility,
       selectedCamadas: exportSelectedCamadas,
-      selectedCompanies: exportSelectedCompanies
+      selectedCompanies: exportSelectedCompanies,
+      nameQuery: exportNameQuery.trim() || undefined
     });
-  }, [exportCustomTargetSummary, summary, exportEligibility, exportSelectedCamadas, exportSelectedCompanies]);
+  }, [exportCustomTargetSummary, summary, exportEligibility, exportSelectedCamadas, exportSelectedCompanies, exportNameQuery]);
 
   const exportPreviewTotalDistributed = useMemo(() => {
     return exportPreviewCandidates.reduce((s, c) => s + (c.isEligible ? c.allocatedAmount : 0), 0);
@@ -1278,7 +1350,7 @@ export function BprCockpitModal({
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                    Descontar Adicionais de:
+                    Tratamento / Abatimento dos Adicionais:
                   </label>
                   <select
                     value={config.additionalDeductionSource || 'total_pool'}
@@ -1289,6 +1361,7 @@ export function BprCockpitModal({
                     className="w-full min-h-[40px] bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-amber-500"
                   >
                     <option value="total_pool">Total Rateado (Padrão — Desconta do Bolo Geral)</option>
+                    <option value="extra_bonus">Não descontar — Acréscimo de Bônus ao Total</option>
                     <option value="own_layer">Própria Camada do Colaborador</option>
                     <option value="E">Nível Estratégico (E)</option>
                     <option value="T">Nível Tático (T)</option>
@@ -1297,23 +1370,40 @@ export function BprCockpitModal({
                 </div>
 
                 {totalAdditionalAmount > 0 ? (
-                  <div className="bg-white border border-amber-200/80 rounded-lg p-2.5 space-y-1 text-xs font-mono">
-                    <div className="flex justify-between text-slate-600">
-                      <span className="font-sans font-semibold">Montante Total:</span>
-                      <span className="font-bold">{formatCurrency(summary.totalPoolAmount)}</span>
+                  config.additionalDeductionSource === 'extra_bonus' ? (
+                    <div className="bg-white border border-emerald-200 rounded-lg p-2.5 space-y-1 text-xs font-mono">
+                      <div className="flex justify-between text-slate-600">
+                        <span className="font-sans font-semibold">Montante Base dos Níveis:</span>
+                        <span className="font-bold">{formatCurrency(summary.basePoolAmount ?? summary.netPoolForLayers ?? 0)}</span>
+                      </div>
+                      <div className="flex justify-between text-emerald-700">
+                        <span className="font-sans font-semibold">(+) Acréscimo de Bônus (Sem Abatimento):</span>
+                        <span className="font-bold">+ {formatCurrency(summary.extraBonusAmount ?? totalAdditionalAmount)}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-900 pt-1 border-t border-slate-100 font-black">
+                        <span className="font-sans">(=) Montante Total Final BPR:</span>
+                        <span>{formatCurrency(summary.totalPoolAmount)}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-amber-700">
-                      <span className="font-sans font-semibold">(-) Adicionais Individuais:</span>
-                      <span className="font-bold">- {formatCurrency(totalAdditionalAmount)}</span>
+                  ) : (
+                    <div className="bg-white border border-amber-200/80 rounded-lg p-2.5 space-y-1 text-xs font-mono">
+                      <div className="flex justify-between text-slate-600">
+                        <span className="font-sans font-semibold">Montante Total:</span>
+                        <span className="font-bold">{formatCurrency(summary.totalPoolAmount)}</span>
+                      </div>
+                      <div className="flex justify-between text-amber-700">
+                        <span className="font-sans font-semibold">(-) Adicionais Individuais:</span>
+                        <span className="font-bold">- {formatCurrency(totalAdditionalAmount)}</span>
+                      </div>
+                      <div className="flex justify-between text-emerald-700 pt-1 border-t border-slate-100 font-black">
+                        <span className="font-sans">(=) Líquido Rateado nos Níveis:</span>
+                        <span>{formatCurrency(summary.netPoolForLayers ?? summary.totalPoolAmount)}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-emerald-700 pt-1 border-t border-slate-100 font-black">
-                      <span className="font-sans">(=) Líquido Rateado nos Níveis:</span>
-                      <span>{formatCurrency(summary.netPoolForLayers ?? summary.totalPoolAmount)}</span>
-                    </div>
-                  </div>
+                  )
                 ) : (
                   <p className="text-[11px] text-slate-500">
-                    Insira valores na coluna <strong>+ Adicional (R$)</strong> da grade abaixo. Caso não reduza de uma camada específica, será descontado do total rateado.
+                    Insira valores na coluna <strong>+ Adicional (R$)</strong> da grade abaixo. Escolha entre descontar do total/camada ou somar como <strong>Acréscimo de Bônus</strong>.
                   </p>
                 )}
               </div>
@@ -1422,6 +1512,122 @@ export function BprCockpitModal({
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Simulador de Meta por Múltiplo Salarial por Camada (x) */}
+              <div className="bg-white border border-sky-200 rounded-2xl shadow-sm overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setIsTargetMultiplePanelOpen(prev => !prev)}
+                  className="w-full min-h-[48px] px-5 py-3 bg-sky-50/70 hover:bg-sky-50 flex flex-wrap items-center justify-between gap-2 text-left transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={15} className="text-sky-600 shrink-0" />
+                    <span className="text-xs font-black uppercase tracking-wider text-sky-900">
+                      Simulador de Meta por Múltiplo Salarial (x)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {targetMultipleSimulation.totalRequiredPool > 0 && (
+                      <span className="text-xs font-black font-mono text-sky-800 bg-white border border-sky-200 px-2.5 py-0.5 rounded-full">
+                        Meta: {formatCurrency(targetMultipleSimulation.totalRequiredPool)}
+                      </span>
+                    )}
+                    <span className="text-[11px] font-bold text-sky-700">
+                      {isTargetMultiplePanelOpen ? 'Ocultar ▲' : 'Simular ▼'}
+                    </span>
+                  </div>
+                </button>
+
+                {isTargetMultiplePanelOpen && (
+                  <div className="p-4 sm:p-5 space-y-3.5 border-t border-sky-100">
+                    <p className="text-xs text-slate-600">
+                      Informe o múltiplo alvo sobre a <strong>média mensal recebida</strong> em cada camada (ex.: <span className="font-mono font-bold">2,0x</span> Estratégico, <span className="font-mono font-bold">1,5x</span> Tático, <span className="font-mono font-bold">1,0x</span> Operacional) para calcular o montante necessário.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {([
+                        { key: 'E' as BprCamada, title: 'Estratégico (E)', boxClass: 'bg-blue-50/60 border-blue-200', accentText: 'text-blue-700' },
+                        { key: 'T' as BprCamada, title: 'Tático (T)', boxClass: 'bg-slate-50 border-slate-200', accentText: 'text-slate-800' },
+                        { key: 'O' as BprCamada, title: 'Operacional (O)', boxClass: 'bg-emerald-50/60 border-emerald-200', accentText: 'text-emerald-700' },
+                      ]).map(item => {
+                        const proj = targetMultipleSimulation.layers[item.key];
+                        return (
+                          <div key={item.key} className={`rounded-xl border p-3 space-y-2 ${item.boxClass}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-xs font-black ${item.accentText}`}>{item.title}</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  aria-label={`Múltiplo alvo para ${item.title}`}
+                                  value={targetMultiples[item.key]}
+                                  onChange={e => {
+                                    const v = Math.max(0, parseFloat(e.target.value) || 0);
+                                    setTargetMultiples(prev => ({ ...prev, [item.key]: v }));
+                                  }}
+                                  className="w-16 min-h-[34px] bg-white border border-slate-300 rounded-lg px-2 py-1 text-right font-mono font-black text-xs text-slate-900 outline-none focus:border-sky-500"
+                                />
+                                <span className="text-xs font-black text-slate-500">x</span>
+                              </div>
+                            </div>
+
+                            {proj.eligibleWithHistoryCount > 0 ? (
+                              <div className="text-[11px] font-mono space-y-0.5 pt-1 border-t border-slate-200/70">
+                                <div className="flex justify-between">
+                                  <span className="font-sans text-slate-500">Montante ({proj.equivalentPercentage}%):</span>
+                                  <strong className="text-slate-900">{formatCurrency(proj.requiredLayerAmount)}</strong>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="font-sans text-slate-500">Por pessoa:</span>
+                                  <span className={`font-bold ${item.accentText}`}>{formatCurrency(proj.requiredAmountPerEligible)}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-amber-700 font-medium pt-1 border-t border-slate-200/70">
+                                Sem histórico na camada
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {!targetMultipleSimulation.hasAnyHistory && (
+                      <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3 font-medium">
+                        Nenhum lançamento no custo histórico do People foi encontrado para os elegíveis no período atual ({config.periodStartDate} a {config.periodEndDate}).
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400 block">Montante Total Necessário</span>
+                        <strong className="text-base font-black font-mono text-sky-800">
+                          {formatCurrency(targetMultipleSimulation.totalRequiredPool)}
+                        </strong>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleLoadCurrentMultiplesToSimulator}
+                          className="min-h-[40px] px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold transition-all cursor-pointer"
+                        >
+                          Puxar Múltiplos Atuais
+                        </button>
+                        <button
+                          type="button"
+                          disabled={targetMultipleSimulation.totalRequiredPool <= 0}
+                          onClick={handleApplyTargetMultipleSimulation}
+                          className="min-h-[40px] px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-40 text-white text-xs font-black shadow-sm transition-all cursor-pointer active:scale-95"
+                        >
+                          Aplicar Meta no Simulador
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Toggles de Políticas Especiais & Exceções */}
@@ -1608,16 +1814,56 @@ export function BprCockpitModal({
               </button>
             )}
 
-            {/* Busca Rápida */}
-            <div className="relative flex-1 min-w-[220px] max-w-sm">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Buscar contratado ou escopo..."
-                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 shadow-sm"
-              />
+            {/* Filtro Direto por Nome + Busca Rápida */}
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px] justify-end">
+              {/* Dropdown Alfabético: Filtrar por Nome */}
+              <div className="flex items-center gap-1 min-w-[200px] max-w-xs flex-1 sm:flex-initial">
+                <select
+                  aria-label="Filtrar por nome do colaborador"
+                  value={selectedEmployeeIdFilter}
+                  onChange={e => setSelectedEmployeeIdFilter(e.target.value)}
+                  className="w-full min-h-[40px] bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 shadow-sm cursor-pointer"
+                >
+                  <option value="">Filtrar por Nome ({availableCandidateNames.length})</option>
+                  {availableCandidateNames.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                {selectedEmployeeIdFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedEmployeeIdFilter('')}
+                    className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 cursor-pointer shrink-0"
+                    title="Limpar filtro por nome selecionado"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Busca Textual por Nome / Razão Social / Responsável / Cargo */}
+              <div className="relative flex-1 min-w-[220px] max-w-sm">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por nome, razão social, responsável ou cargo..."
+                  className="w-full min-h-[40px] bg-white border border-slate-200 rounded-xl pl-9 pr-8 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 shadow-sm"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer"
+                    title="Limpar busca"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1951,8 +2197,14 @@ export function BprCockpitModal({
                 </div>
 
                 <div>
-                  <span className="text-xs font-bold text-amber-600 uppercase block tracking-wider">+ Adicionais:</span>
-                  <strong className="text-base font-black text-amber-700 font-mono">
+                  <span className={`text-xs font-bold uppercase block tracking-wider ${
+                    config.additionalDeductionSource === 'extra_bonus' ? 'text-emerald-600' : 'text-amber-600'
+                  }`}>
+                    {config.additionalDeductionSource === 'extra_bonus' ? '+ Acréscimo Bônus:' : '+ Adicionais:'}
+                  </span>
+                  <strong className={`text-base font-black font-mono ${
+                    config.additionalDeductionSource === 'extra_bonus' ? 'text-emerald-700' : 'text-amber-700'
+                  }`}>
                     {formatCurrency(totalAdditionalAmount)}
                   </strong>
                 </div>
@@ -3591,10 +3843,37 @@ export function BprCockpitModal({
                 </div>
               </div>
 
-              {/* 4. SEÇÕES ADICIONAIS DO DOCUMENTO */}
+              {/* 4. FILTRO POR NOME (OPCIONAL) */}
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">
-                  4. Estrutura e Seções do Documento:
+                  4. Filtrar por Nome(s) (Opcional):
+                </label>
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={exportNameQuery}
+                    onChange={e => setExportNameQuery(e.target.value)}
+                    placeholder="Ex: João Silva ou Maria, Carlos (separe múltiplos nomes por vírgula)"
+                    className="w-full min-h-[40px] pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:bg-white focus:border-amber-500"
+                  />
+                  {exportNameQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setExportNameQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer"
+                      title="Limpar filtro por nome"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 5. SEÇÕES ADICIONAIS DO DOCUMENTO */}
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+                  5. Estrutura e Seções do Documento:
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <label className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100">

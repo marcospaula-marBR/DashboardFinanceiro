@@ -6,6 +6,8 @@ import {
   BprCamada,
   BprLayerSummary,
   BprLayerRelativeWeight,
+  BprTargetMultipleLayerProjection,
+  BprTargetMultipleSimulation,
   BprCycle,
   BprSavedScenario,
   BprSavedRun
@@ -500,19 +502,27 @@ export class BprService {
       };
 
     const grossLayersSum = Number((gross.E + gross.T + gross.O).toFixed(2));
-    const effectiveTotalPool = isAmountMode
+    const basePoolAmount = isAmountMode
       ? Math.max(grossLayersSum, Number((config.totalPoolAmount || 0).toFixed(2)))
       : Math.max(0, Number((config.totalPoolAmount || 0).toFixed(2)));
 
-    // Quanto o usuário já reduziu manualmente nos níveis abaixo do montante total
-    const manualLayerReduction = Math.max(0, Number((effectiveTotalPool - grossLayersSum).toFixed(2)));
-    const remainingToDeduct = Math.max(0, Number((totalAdditionalAmount - manualLayerReduction).toFixed(2)));
-
-    // Regra de Abatimento (total_pool | own_layer | E | T | O)
+    // Regra de Abatimento (total_pool | own_layer | E | T | O | extra_bonus)
     const source = config.additionalDeductionSource || 'total_pool';
+    const isExtraBonusMode = source === 'extra_bonus';
+    const extraBonusAmount = isExtraBonusMode ? totalAdditionalAmount : 0;
+    const effectiveTotalPool = isExtraBonusMode
+      ? Number((basePoolAmount + extraBonusAmount).toFixed(2))
+      : basePoolAmount;
+
+    // Quanto o usuário já reduziu manualmente nos níveis abaixo do montante base
+    const manualLayerReduction = Math.max(0, Number((basePoolAmount - grossLayersSum).toFixed(2)));
+    const remainingToDeduct = isExtraBonusMode
+      ? 0
+      : Math.max(0, Number((totalAdditionalAmount - manualLayerReduction).toFixed(2)));
+
     const deduct: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
 
-    if (remainingToDeduct > 0 && grossLayersSum > 0) {
+    if (!isExtraBonusMode && remainingToDeduct > 0 && grossLayersSum > 0) {
       if (source === 'E' || source === 'T' || source === 'O') {
         const direct = Math.min(gross[source], remainingToDeduct);
         deduct[source] = direct;
@@ -561,9 +571,9 @@ export class BprService {
       O: Math.max(0, Number((gross.O - deduct.O).toFixed(2))),
     };
 
-    const layerPctE = isAmountMode ? (effectiveTotalPool > 0 ? Number(((gross.E / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.E;
-    const layerPctT = isAmountMode ? (effectiveTotalPool > 0 ? Number(((gross.T / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.T;
-    const layerPctO = isAmountMode ? (effectiveTotalPool > 0 ? Number(((gross.O / effectiveTotalPool) * 100).toFixed(1)) : 0) : config.tierSplits.O;
+    const layerPctE = isAmountMode ? (basePoolAmount > 0 ? Number(((gross.E / basePoolAmount) * 100).toFixed(1)) : 0) : config.tierSplits.E;
+    const layerPctT = isAmountMode ? (basePoolAmount > 0 ? Number(((gross.T / basePoolAmount) * 100).toFixed(1)) : 0) : config.tierSplits.T;
+    const layerPctO = isAmountMode ? (basePoolAmount > 0 ? Number(((gross.O / basePoolAmount) * 100).toFixed(1)) : 0) : config.tierSplits.O;
 
     const layers: Record<BprCamada, BprLayerSummary> = {
       E: {
@@ -673,6 +683,8 @@ export class BprService {
 
     return {
       totalPoolAmount: effectiveTotalPool,
+      basePoolAmount,
+      extraBonusAmount,
       totalAdditionalAmount,
       netPoolForLayers,
       totalPeriodReceivedAmount: totalPeriodReceivedRounded,
@@ -686,6 +698,98 @@ export class BprService {
       candidates: updatedCandidates,
       glosadosCandidates: glosadosCandidatesArg || updatedCandidates.filter(c => c.hasGlosaInPeriod),
       inativosCandidates: inativosCandidatesArg || updatedCandidates.filter(c => c.isInactiveAtPaymentDate)
+    };
+  }
+
+  /**
+   * Simulador de Meta por Múltiplo Salarial / Honorários Mensais por Camada (ex: E=2.0x, T=1.5x, O=1.0x).
+   * Calcula o montante exato por camada e o montante total necessário para atingir os múltiplos alvo.
+   */
+  static simulatePoolFromTargetMultiples(
+    candidates: BprCandidateResult[],
+    targetMultiples: Record<BprCamada, number>
+  ): BprTargetMultipleSimulation {
+    const labelMap: Record<BprCamada, string> = {
+      E: 'Estratégico',
+      T: 'Tático',
+      O: 'Operacional/CLTs',
+    };
+
+    const rawLayers: Record<BprCamada, Omit<BprTargetMultipleLayerProjection, 'equivalentPercentage'>> = {
+      E: { camada: 'E', label: labelMap.E, targetMultiple: 0, eligibleCount: 0, eligibleWithHistoryCount: 0, monthlyAverageBase: 0, requiredAmountPerEligible: 0, requiredLayerAmount: 0 },
+      T: { camada: 'T', label: labelMap.T, targetMultiple: 0, eligibleCount: 0, eligibleWithHistoryCount: 0, monthlyAverageBase: 0, requiredAmountPerEligible: 0, requiredLayerAmount: 0 },
+      O: { camada: 'O', label: labelMap.O, targetMultiple: 0, eligibleCount: 0, eligibleWithHistoryCount: 0, monthlyAverageBase: 0, requiredAmountPerEligible: 0, requiredLayerAmount: 0 },
+    };
+
+    (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
+      const targetMult = Math.max(0, Number(targetMultiples[k] || 0));
+      let eligibleCount = 0;
+      let eligibleWithHistoryCount = 0;
+      let monthlyAverageBase = 0;
+      let effWeightSum = 0;
+
+      candidates.forEach(c => {
+        if (!c.isEligible || c.camada !== k) return;
+        eligibleCount += 1;
+        const avg = Number(c.periodReceivedAverage || 0);
+        if (avg > 0) {
+          eligibleWithHistoryCount += 1;
+          monthlyAverageBase += avg;
+          effWeightSum += (c.performanceFactor ?? 1.0);
+        }
+      });
+
+      const monthlyAvgRounded = Number(monthlyAverageBase.toFixed(2));
+      const requiredAmountPerEligible = (eligibleWithHistoryCount > 0 && effWeightSum > 0 && targetMult > 0)
+        ? Number(((targetMult * monthlyAvgRounded) / effWeightSum).toFixed(2))
+        : 0;
+      const requiredLayerAmount = Number((requiredAmountPerEligible * eligibleCount).toFixed(2));
+
+      rawLayers[k] = {
+        camada: k,
+        label: labelMap[k],
+        targetMultiple: targetMult,
+        eligibleCount,
+        eligibleWithHistoryCount,
+        monthlyAverageBase: monthlyAvgRounded,
+        requiredAmountPerEligible,
+        requiredLayerAmount,
+      };
+    });
+
+    const totalRequiredPool = Number(
+      (rawLayers.E.requiredLayerAmount + rawLayers.T.requiredLayerAmount + rawLayers.O.requiredLayerAmount).toFixed(2)
+    );
+
+    const pcts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
+    if (totalRequiredPool > 0) {
+      pcts.E = Math.round((rawLayers.E.requiredLayerAmount / totalRequiredPool) * 100);
+      pcts.T = Math.round((rawLayers.T.requiredLayerAmount / totalRequiredPool) * 100);
+      pcts.O = Math.round((rawLayers.O.requiredLayerAmount / totalRequiredPool) * 100);
+      const sumPct = pcts.E + pcts.T + pcts.O;
+      if (sumPct !== 100) {
+        const sortedKeys = (['E', 'T', 'O'] as BprCamada[]).sort(
+          (a, b) => rawLayers[b].requiredLayerAmount - rawLayers[a].requiredLayerAmount
+        );
+        pcts[sortedKeys[0]] += (100 - sumPct);
+      }
+    }
+
+    const layers: Record<BprCamada, BprTargetMultipleLayerProjection> = {
+      E: { ...rawLayers.E, equivalentPercentage: pcts.E },
+      T: { ...rawLayers.T, equivalentPercentage: pcts.T },
+      O: { ...rawLayers.O, equivalentPercentage: pcts.O },
+    };
+
+    const hasAnyHistory =
+      rawLayers.E.eligibleWithHistoryCount > 0 ||
+      rawLayers.T.eligibleWithHistoryCount > 0 ||
+      rawLayers.O.eligibleWithHistoryCount > 0;
+
+    return {
+      totalRequiredPool,
+      layers,
+      hasAnyHistory,
     };
   }
 
@@ -805,6 +909,8 @@ export class BprService {
       config: params.newConfig,
       summary: {
         totalPoolAmount: recalculated.totalPoolAmount,
+        basePoolAmount: recalculated.basePoolAmount,
+        extraBonusAmount: recalculated.extraBonusAmount,
         totalAdditionalAmount: recalculated.totalAdditionalAmount,
         netPoolForLayers: recalculated.netPoolForLayers,
         totalPeriodReceivedAmount: recalculated.totalPeriodReceivedAmount,
