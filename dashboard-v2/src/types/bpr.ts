@@ -6,6 +6,39 @@ export type BprSplitMode = 'percentage' | 'amount'; // Rateio por % ou por Valor
 
 export type BprAdditionalDeductionSource = 'total_pool' | 'own_layer' | BprCamada | 'extra_bonus';
 
+export type BprDedicatedGroupDistributionMode = 'equal' | 'percentage' | 'amount';
+
+export type BprDedicatedGroupFundingSource = 'total_pool' | BprCamada | 'extra_bonus';
+
+export interface BprDedicatedGroupMember {
+  employeeId: string;
+  percentage?: number; // % individual sobre poolAmount quando distributionMode === 'percentage'
+  amount?: number;     // R$ absoluto individual quando distributionMode === 'amount'
+}
+
+export interface BprDedicatedGroup {
+  id: string;
+  name: string;                                        // Ex: "Equipe Projeto X"
+  criteriaDescription?: string;                        // Critério / observação do grupo
+  enabled: boolean;                                    // Ativo ou pausado
+  poolAmount: number;                                  // Montante específico destinado ao grupo (R$)
+  distributionMode: BprDedicatedGroupDistributionMode; // 'equal' | 'percentage' | 'amount'
+  fundingSource: BprDedicatedGroupFundingSource;       // 'total_pool' | 'E' | 'T' | 'O' | 'extra_bonus'
+  members: BprDedicatedGroupMember[];
+}
+
+export interface BprDedicatedGroupSummary {
+  groupId: string;
+  name: string;
+  criteriaDescription?: string;
+  fundingSource: BprDedicatedGroupFundingSource;
+  distributionMode: BprDedicatedGroupDistributionMode;
+  poolAmount: number;
+  allocatedTotal: number;
+  memberCount: number;
+  residualAmount: number;
+}
+
 export interface BprTierSplit {
   E: number; // % Estratégico (ex: 30)
   T: number; // % Tático (ex: 40)
@@ -30,7 +63,9 @@ export interface BprRuleConfig {
   tierAmounts?: BprTierAmounts; // Valores fixos em R$ por camada
   additionalAmounts?: Record<string, number>; // Mapa employeeId -> valor adicional em R$
   additionalReasons?: Record<string, string>; // Mapa employeeId -> motivo / observação curta do adicional
-  additionalDeductionSource?: BprAdditionalDeductionSource; // 'total_pool' (padrão) | 'own_layer' | 'E' | 'T' | 'O'
+  additionalDeductionSource?: BprAdditionalDeductionSource; // 'total_pool' (padrão) | 'own_layer' | 'E' | 'T' | 'O' | 'extra_bonus'
+  allowDedicatedGroups?: boolean; // Permissão/chave para habilitar grupos de montante específico exclusivo
+  dedicatedGroups?: BprDedicatedGroup[]; // Grupos dedicados de montante específico
   allowGlosados: boolean;
   selectedGlosadosExceptions: string[]; // IDs de colaboradores glosados que farão jus excepcionalmente
   allowInativos: boolean;
@@ -109,6 +144,11 @@ export interface BprCandidateResult {
   periodMonthsCount?: number;     // Quantidade de competências encontradas no histórico dentro do período
   bprVsAveragePct?: number;       // % que o BPR final equivale em relação à média mensal recebida
   bprVsTotalPct?: number;         // % que o BPR final equivale em relação ao montante total recebido no período
+
+  // Grupo Dedicado de Montante Específico (Exclusivo — fora do rateio E/T/O)
+  dedicatedGroupId?: string;
+  dedicatedGroupName?: string;
+  dedicatedGroupSharePct?: number;
 }
 
 export interface BprLayerRelativeWeight {
@@ -127,8 +167,9 @@ export interface BprLayerSummary {
   label: string;
   allocatedPercentage: number;
   totalLayerAmount: number;
-  grossLayerAmount?: number;            // R$ montante bruto da camada antes de abatimento de adicionais
-  additionalDeductedFromLayer?: number; // R$ valor de adicionais descontado desta camada
+  grossLayerAmount?: number;                 // R$ montante bruto da camada antes de abatimento de adicionais/grupos
+  dedicatedGroupsDeductedFromLayer?: number; // R$ valor de grupos dedicados descontado desta camada
+  additionalDeductedFromLayer?: number;      // R$ valor de adicionais individuais descontado desta camada
   eligibleCount: number;
   ineligibleCount: number;
   amountPerEligible: number;
@@ -165,6 +206,12 @@ export interface BprCalculationSummary {
   netPoolForLayers?: number;          // R$ saldo líquido efetivamente rateado entre as camadas E, T e O
   totalPeriodReceivedAmount?: number; // R$ soma dos montantes históricos recebidos pelos elegíveis no período
   overallRelativeWeight?: BprLayerRelativeWeight; // Peso relativo consolidado do BPR sobre recebimentos médios
+  dedicatedGroupsTotalPool?: number;       // R$ soma dos montantes dos grupos dedicados ativos
+  dedicatedGroupsAllocatedTotal?: number;  // R$ soma distribuída nos grupos dedicados ativos
+  dedicatedGroupsExtraBonusTotal?: number; // R$ parcela dos grupos dedicados como acréscimo extra ao total
+  dedicatedGroupsCount?: number;           // Quantidade de grupos dedicados ativos
+  dedicatedMembersCount?: number;          // Quantidade total de colaboradores alocados em grupos dedicados
+  dedicatedGroupSummaries?: BprDedicatedGroupSummary[];
   totalDistributedAmount: number;
   residualAmount: number;
   totalCandidates: number;
@@ -192,6 +239,12 @@ export interface BprSavedScenario {
     netPoolForLayers?: number;
     totalPeriodReceivedAmount?: number;
     overallRelativeWeight?: BprLayerRelativeWeight;
+    dedicatedGroupsTotalPool?: number;
+    dedicatedGroupsAllocatedTotal?: number;
+    dedicatedGroupsExtraBonusTotal?: number;
+    dedicatedGroupsCount?: number;
+    dedicatedMembersCount?: number;
+    dedicatedGroupSummaries?: BprDedicatedGroupSummary[];
     totalDistributedAmount: number;
     residualAmount: number;
     totalCandidates: number;

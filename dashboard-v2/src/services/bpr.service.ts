@@ -10,7 +10,8 @@ import {
   BprTargetMultipleSimulation,
   BprCycle,
   BprSavedScenario,
-  BprSavedRun
+  BprSavedRun,
+  BprDedicatedGroupSummary
 } from '@/types/bpr';
 import { supabase } from '@/lib/supabase';
 import { calculateRowFinancials } from '@/services/people-hr.service';
@@ -40,6 +41,8 @@ export class BprService {
         additionalAmounts: {},
         additionalReasons: {},
         additionalDeductionSource: 'total_pool',
+        allowDedicatedGroups: false,
+        dedicatedGroups: [],
         allowGlosados: false,
         selectedGlosadosExceptions: [],
         allowInativos: false,
@@ -63,6 +66,8 @@ export class BprService {
         additionalAmounts: {},
         additionalReasons: {},
         additionalDeductionSource: 'total_pool',
+        allowDedicatedGroups: false,
+        dedicatedGroups: [],
         allowGlosados: false,
         selectedGlosadosExceptions: [],
         allowInativos: false,
@@ -85,6 +90,8 @@ export class BprService {
         additionalAmounts: {},
         additionalReasons: {},
         additionalDeductionSource: 'total_pool',
+        allowDedicatedGroups: false,
+        dedicatedGroups: [],
         allowGlosados: false,
         selectedGlosadosExceptions: [],
         allowInativos: false,
@@ -462,7 +469,7 @@ export class BprService {
   }
 
   /**
-   * Motor puro de cálculo de rateio por camada, valores adicionais individuais e regra de abatimento
+   * Motor puro de cálculo de rateio por camada, grupos dedicados exclusivos, valores adicionais individuais e regra de abatimento
    */
   static computeLayersAndAdditionalDistribution(
     candidates: BprCandidateResult[],
@@ -470,6 +477,110 @@ export class BprService {
     glosadosCandidatesArg?: BprCandidateResult[],
     inativosCandidatesArg?: BprCandidateResult[]
   ): BprCalculationSummary {
+    const round2 = (v: number) => Number(v.toFixed(2));
+    const candidateById = new Map<string, BprCandidateResult>();
+    candidates.forEach(c => candidateById.set(c.employeeId, c));
+    const manuallyExcludedSet = new Set(config.manuallyExcludedEmployeeIds || []);
+
+    // 1. Resolução dos Grupos Dedicados de Montante Específico (Exclusivos — fora do rateio E/T/O)
+    const claimedMemberIds = new Set<string>();
+    const memberAssignment = new Map<
+      string,
+      { groupId: string; groupName: string; shareAmount: number; sharePct: number }
+    >();
+    const dedicatedGroupSummaries: BprDedicatedGroupSummary[] = [];
+    let dedicatedGroupsTotalPool = 0;
+    let dedicatedGroupsAllocatedTotal = 0;
+    let dedicatedGroupsExtraBonusTotal = 0;
+    let dedicatedMembersCount = 0;
+
+    if (config.allowDedicatedGroups && Array.isArray(config.dedicatedGroups) && config.dedicatedGroups.length > 0) {
+      config.dedicatedGroups.forEach(group => {
+        if (!group || !group.enabled || !Array.isArray(group.members) || group.members.length === 0) return;
+
+        const validMembers = group.members.filter(m => {
+          if (!m || !m.employeeId) return false;
+          const cand = candidateById.get(m.employeeId);
+          if (!cand) return false;
+          if (cand.isManuallyExcluded || manuallyExcludedSet.has(m.employeeId)) return false;
+          if (claimedMemberIds.has(m.employeeId)) return false;
+          return true;
+        });
+
+        if (validMembers.length === 0) return;
+        validMembers.forEach(m => claimedMemberIds.add(m.employeeId));
+
+        const mode = group.distributionMode || 'equal';
+        let effectiveGroupPool = Math.max(0, round2(Number(group.poolAmount || 0)));
+        let groupAllocated = 0;
+
+        if (mode === 'equal') {
+          const perMember = validMembers.length > 0 ? round2(effectiveGroupPool / validMembers.length) : 0;
+          const sharePct = validMembers.length > 0 ? round2(100 / validMembers.length) : 0;
+          validMembers.forEach(m => {
+            groupAllocated = round2(groupAllocated + perMember);
+            memberAssignment.set(m.employeeId, {
+              groupId: group.id,
+              groupName: (group.name || 'Grupo Específico').trim(),
+              shareAmount: perMember,
+              sharePct,
+            });
+          });
+        } else if (mode === 'percentage') {
+          validMembers.forEach(m => {
+            const pct = Math.max(0, Number(m.percentage || 0));
+            const shareAmount = round2((effectiveGroupPool * pct) / 100);
+            groupAllocated = round2(groupAllocated + shareAmount);
+            memberAssignment.set(m.employeeId, {
+              groupId: group.id,
+              groupName: (group.name || 'Grupo Específico').trim(),
+              shareAmount,
+              sharePct: round2(pct),
+            });
+          });
+        } else {
+          // mode === 'amount'
+          const memberAmounts = validMembers.map(m => ({
+            employeeId: m.employeeId,
+            amount: Math.max(0, round2(Number(m.amount || 0))),
+          }));
+          const sumAmounts = round2(memberAmounts.reduce((acc, item) => acc + item.amount, 0));
+          effectiveGroupPool = Math.max(effectiveGroupPool, sumAmounts);
+          memberAmounts.forEach(item => {
+            groupAllocated = round2(groupAllocated + item.amount);
+            const sharePct = effectiveGroupPool > 0 ? round2((item.amount / effectiveGroupPool) * 100) : 0;
+            memberAssignment.set(item.employeeId, {
+              groupId: group.id,
+              groupName: (group.name || 'Grupo Específico').trim(),
+              shareAmount: item.amount,
+              sharePct,
+            });
+          });
+        }
+
+        const groupResidual = Math.max(0, round2(effectiveGroupPool - groupAllocated));
+        dedicatedGroupsTotalPool = round2(dedicatedGroupsTotalPool + effectiveGroupPool);
+        dedicatedGroupsAllocatedTotal = round2(dedicatedGroupsAllocatedTotal + groupAllocated);
+        dedicatedMembersCount += validMembers.length;
+        if (group.fundingSource === 'extra_bonus') {
+          dedicatedGroupsExtraBonusTotal = round2(dedicatedGroupsExtraBonusTotal + effectiveGroupPool);
+        }
+
+        dedicatedGroupSummaries.push({
+          groupId: group.id,
+          name: (group.name || 'Grupo Específico').trim(),
+          criteriaDescription: (group.criteriaDescription || '').trim() || undefined,
+          fundingSource: group.fundingSource || 'total_pool',
+          distributionMode: mode,
+          poolAmount: effectiveGroupPool,
+          allocatedTotal: groupAllocated,
+          memberCount: validMembers.length,
+          residualAmount: groupResidual,
+        });
+      });
+    }
+
+    // 2. Contagem de Elegíveis das Camadas Padrão (excluindo membros de Grupos Dedicados — Regra Exclusiva)
     const layerEligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
     const layerIneligibleCounts: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
     const additionalByOwnLayer: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
@@ -477,17 +588,23 @@ export class BprService {
     let totalAdditionalAmount = 0;
 
     candidates.forEach(c => {
-      if (c.isEligible) {
+      const isDedicated = memberAssignment.has(c.employeeId);
+      if (isDedicated) {
+        // Membro em grupo dedicado é elegível exclusivamente pelo grupo (não entra no divisor E/T/O)
+        const addVal = Math.max(0, round2(Number(additionalMap[c.employeeId] || 0)));
+        additionalByOwnLayer[c.camada] = round2(additionalByOwnLayer[c.camada] + addVal);
+        totalAdditionalAmount = round2(totalAdditionalAmount + addVal);
+      } else if (c.isEligible) {
         layerEligibleCounts[c.camada] = (layerEligibleCounts[c.camada] || 0) + 1;
-        const addVal = Math.max(0, Number((Number(additionalMap[c.employeeId] || 0)).toFixed(2)));
-        additionalByOwnLayer[c.camada] = Number((additionalByOwnLayer[c.camada] + addVal).toFixed(2));
-        totalAdditionalAmount = Number((totalAdditionalAmount + addVal).toFixed(2));
+        const addVal = Math.max(0, round2(Number(additionalMap[c.employeeId] || 0)));
+        additionalByOwnLayer[c.camada] = round2(additionalByOwnLayer[c.camada] + addVal);
+        totalAdditionalAmount = round2(totalAdditionalAmount + addVal);
       } else {
         layerIneligibleCounts[c.camada] = (layerIneligibleCounts[c.camada] || 0) + 1;
       }
     });
 
-    // Rateio Bruto por Camada (Porcentagem ou Valor Fixo R$)
+    // 3. Rateio Bruto por Camada (Porcentagem ou Valor Fixo R$)
     const isAmountMode = config.splitMode === 'amount' && !!config.tierAmounts;
     const gross: Record<BprCamada, number> = isAmountMode
       ? {
@@ -501,74 +618,133 @@ export class BprService {
         O: Math.max(0, (Math.max(0, Number(config.totalPoolAmount || 0)) * (config.tierSplits.O || 0)) / 100),
       };
 
-    const grossLayersSum = Number((gross.E + gross.T + gross.O).toFixed(2));
+    const grossLayersSum = round2(gross.E + gross.T + gross.O);
     const basePoolAmount = isAmountMode
-      ? Math.max(grossLayersSum, Number((config.totalPoolAmount || 0).toFixed(2)))
-      : Math.max(0, Number((config.totalPoolAmount || 0).toFixed(2)));
+      ? Math.max(grossLayersSum, round2(config.totalPoolAmount || 0))
+      : Math.max(0, round2(config.totalPoolAmount || 0));
 
-    // Regra de Abatimento (total_pool | own_layer | E | T | O | extra_bonus)
+    // 4. Abatimento de Grupos Dedicados e Valores Adicionais sobre as Camadas E/T/O
     const source = config.additionalDeductionSource || 'total_pool';
     const isExtraBonusMode = source === 'extra_bonus';
     const extraBonusAmount = isExtraBonusMode ? totalAdditionalAmount : 0;
-    const effectiveTotalPool = isExtraBonusMode
-      ? Number((basePoolAmount + extraBonusAmount).toFixed(2))
-      : basePoolAmount;
+    const effectiveTotalPool = round2(basePoolAmount + extraBonusAmount + dedicatedGroupsExtraBonusTotal);
 
     // Quanto o usuário já reduziu manualmente nos níveis abaixo do montante base
-    const manualLayerReduction = Math.max(0, Number((basePoolAmount - grossLayersSum).toFixed(2)));
-    const remainingToDeduct = isExtraBonusMode
-      ? 0
-      : Math.max(0, Number((totalAdditionalAmount - manualLayerReduction).toFixed(2)));
+    let remainingManualReduction = Math.max(0, round2(basePoolAmount - grossLayersSum));
+    const cap: Record<BprCamada, number> = { E: gross.E, T: gross.T, O: gross.O };
+    const deductDedicated: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
+    const deductAdditional: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
 
-    const deduct: Record<BprCamada, number> = { E: 0, T: 0, O: 0 };
+    const deductFromTargetLayerWithOverflow = (
+      target: BprCamada,
+      amount: number,
+      ledger: Record<BprCamada, number>
+    ) => {
+      if (amount <= 0) return;
+      const direct = Math.min(cap[target], amount);
+      cap[target] = Math.max(0, cap[target] - direct);
+      ledger[target] += direct;
+      const overflow = amount - direct;
+      if (overflow > 0.005) {
+        const otherKeys: BprCamada[] = (['E', 'T', 'O'] as BprCamada[]).filter(k => k !== target);
+        const otherSum = otherKeys.reduce((acc, k) => acc + cap[k], 0);
+        if (otherSum > 0) {
+          otherKeys.forEach(k => {
+            const share = Math.min(cap[k], overflow * (cap[k] / otherSum));
+            cap[k] = Math.max(0, cap[k] - share);
+            ledger[k] += share;
+          });
+        }
+      }
+    };
 
-    if (!isExtraBonusMode && remainingToDeduct > 0 && grossLayersSum > 0) {
-      if (source === 'E' || source === 'T' || source === 'O') {
-        const direct = Math.min(gross[source], remainingToDeduct);
-        deduct[source] = direct;
-        const overflow = remainingToDeduct - direct;
-        if (overflow > 0) {
-          const otherKeys: BprCamada[] = (['E', 'T', 'O'] as BprCamada[]).filter(k => k !== source);
-          const otherSum = otherKeys.reduce((acc, k) => acc + gross[k], 0);
-          if (otherSum > 0) {
-            otherKeys.forEach(k => {
-              deduct[k] = Math.min(gross[k], overflow * (gross[k] / otherSum));
-            });
-          }
-        }
-      } else if (source === 'own_layer') {
-        const scale = totalAdditionalAmount > 0 ? remainingToDeduct / totalAdditionalAmount : 0;
-        let overflow = 0;
+    const deductProportionallyFromCaps = (
+      amount: number,
+      ledger: Record<BprCamada, number>,
+      useManualReductionHeadroom: boolean
+    ) => {
+      if (amount <= 0) return;
+      let rem = amount;
+      if (useManualReductionHeadroom && remainingManualReduction > 0) {
+        const consumed = Math.min(remainingManualReduction, rem);
+        remainingManualReduction = Math.max(0, round2(remainingManualReduction - consumed));
+        rem = Math.max(0, rem - consumed);
+      }
+      if (rem <= 0.005) return;
+      const totalCap = cap.E + cap.T + cap.O;
+      if (totalCap > 0) {
         (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
-          const wanted = additionalByOwnLayer[k] * scale;
-          const clamped = Math.min(gross[k], wanted);
-          deduct[k] = clamped;
-          overflow += wanted - clamped;
+          const share = Math.min(cap[k], rem * (cap[k] / totalCap));
+          cap[k] = Math.max(0, cap[k] - share);
+          ledger[k] += share;
         });
-        if (overflow > 0.005) {
-          const remainingCap = (['E', 'T', 'O'] as BprCamada[]).reduce(
-            (acc, k) => acc + Math.max(0, gross[k] - deduct[k]),
-            0
-          );
-          if (remainingCap > 0) {
-            (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
-              const cap = Math.max(0, gross[k] - deduct[k]);
-              deduct[k] += Math.min(cap, overflow * (cap / remainingCap));
-            });
+      }
+    };
+
+    // 4a. Abatimento dos Grupos Dedicados (primeiro os vinculados a camada específica E/T/O, depois total_pool)
+    dedicatedGroupSummaries.forEach(gs => {
+      if (gs.fundingSource === 'E' || gs.fundingSource === 'T' || gs.fundingSource === 'O') {
+        deductFromTargetLayerWithOverflow(gs.fundingSource, gs.poolAmount, deductDedicated);
+      }
+    });
+    dedicatedGroupSummaries.forEach(gs => {
+      if (gs.fundingSource === 'total_pool') {
+        deductProportionallyFromCaps(gs.poolAmount, deductDedicated, true);
+      }
+    });
+
+    // 4b. Abatimento dos Valores Adicionais Individuais (total_pool | own_layer | E | T | O | extra_bonus)
+    if (!isExtraBonusMode && totalAdditionalAmount > 0 && (cap.E + cap.T + cap.O) > 0) {
+      const consumedManual = Math.min(remainingManualReduction, totalAdditionalAmount);
+      remainingManualReduction = Math.max(0, round2(remainingManualReduction - consumedManual));
+      const remainingToDeduct = Math.max(0, round2(totalAdditionalAmount - consumedManual));
+
+      if (remainingToDeduct > 0) {
+        if (source === 'E' || source === 'T' || source === 'O') {
+          deductFromTargetLayerWithOverflow(source, remainingToDeduct, deductAdditional);
+        } else if (source === 'own_layer') {
+          const scale = totalAdditionalAmount > 0 ? remainingToDeduct / totalAdditionalAmount : 0;
+          let overflow = 0;
+          (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
+            const wanted = additionalByOwnLayer[k] * scale;
+            const clamped = Math.min(cap[k], wanted);
+            cap[k] = Math.max(0, cap[k] - clamped);
+            deductAdditional[k] += clamped;
+            overflow += wanted - clamped;
+          });
+          if (overflow > 0.005) {
+            const remainingCap = cap.E + cap.T + cap.O;
+            if (remainingCap > 0) {
+              (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
+                const share = Math.min(cap[k], overflow * (cap[k] / remainingCap));
+                cap[k] = Math.max(0, cap[k] - share);
+                deductAdditional[k] += share;
+              });
+            }
           }
+        } else {
+          // Padrão ('total_pool'): descontado proporcionalmente do saldo restante entre os níveis
+          deductProportionallyFromCaps(remainingToDeduct, deductAdditional, false);
         }
-      } else {
-        // Padrão ('total_pool'): descontado proporcionalmente do total rateado entre os níveis
-        (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
-          deduct[k] = Math.min(gross[k], remainingToDeduct * (gross[k] / grossLayersSum));
-        });
       }
     }
 
+    const deductDedicatedRounded: Record<BprCamada, number> = {
+      E: round2(deductDedicated.E),
+      T: round2(deductDedicated.T),
+      O: round2(deductDedicated.O),
+    };
+
     const net: Record<BprCamada, number> = {
-      E: Math.max(0, Number((gross.E - deduct.E).toFixed(2))),
-      T: Math.max(0, Number((gross.T - deduct.T).toFixed(2))),
-      O: Math.max(0, Number((gross.O - deduct.O).toFixed(2))),
+      E: Math.max(0, round2(gross.E - deductDedicated.E - deductAdditional.E)),
+      T: Math.max(0, round2(gross.T - deductDedicated.T - deductAdditional.T)),
+      O: Math.max(0, round2(gross.O - deductDedicated.O - deductAdditional.O)),
+    };
+
+    const deductAdditionalRounded: Record<BprCamada, number> = {
+      E: Math.max(0, round2(gross.E - deductDedicatedRounded.E - net.E)),
+      T: Math.max(0, round2(gross.T - deductDedicatedRounded.T - net.T)),
+      O: Math.max(0, round2(gross.O - deductDedicatedRounded.O - net.O)),
     };
 
     const layerPctE = isAmountMode ? (basePoolAmount > 0 ? Number(((gross.E / basePoolAmount) * 100).toFixed(1)) : 0) : config.tierSplits.E;
@@ -581,12 +757,13 @@ export class BprService {
         label: 'Estratégico',
         allocatedPercentage: layerPctE,
         totalLayerAmount: net.E,
-        grossLayerAmount: Number(gross.E.toFixed(2)),
-        additionalDeductedFromLayer: Number((gross.E - net.E).toFixed(2)),
+        grossLayerAmount: round2(gross.E),
+        dedicatedGroupsDeductedFromLayer: deductDedicatedRounded.E,
+        additionalDeductedFromLayer: deductAdditionalRounded.E,
         eligibleCount: layerEligibleCounts.E,
         ineligibleCount: layerIneligibleCounts.E,
         amountPerEligible: layerEligibleCounts.E > 0
-          ? Number((net.E / layerEligibleCounts.E).toFixed(2))
+          ? round2(net.E / layerEligibleCounts.E)
           : 0
       },
       T: {
@@ -594,12 +771,13 @@ export class BprService {
         label: 'Tático',
         allocatedPercentage: layerPctT,
         totalLayerAmount: net.T,
-        grossLayerAmount: Number(gross.T.toFixed(2)),
-        additionalDeductedFromLayer: Number((gross.T - net.T).toFixed(2)),
+        grossLayerAmount: round2(gross.T),
+        dedicatedGroupsDeductedFromLayer: deductDedicatedRounded.T,
+        additionalDeductedFromLayer: deductAdditionalRounded.T,
         eligibleCount: layerEligibleCounts.T,
         ineligibleCount: layerIneligibleCounts.T,
         amountPerEligible: layerEligibleCounts.T > 0
-          ? Number((net.T / layerEligibleCounts.T).toFixed(2))
+          ? round2(net.T / layerEligibleCounts.T)
           : 0
       },
       O: {
@@ -607,31 +785,35 @@ export class BprService {
         label: 'Operacional/CLTs',
         allocatedPercentage: layerPctO,
         totalLayerAmount: net.O,
-        grossLayerAmount: Number(gross.O.toFixed(2)),
-        additionalDeductedFromLayer: Number((gross.O - net.O).toFixed(2)),
+        grossLayerAmount: round2(gross.O),
+        dedicatedGroupsDeductedFromLayer: deductDedicatedRounded.O,
+        additionalDeductedFromLayer: deductAdditionalRounded.O,
         eligibleCount: layerEligibleCounts.O,
         ineligibleCount: layerIneligibleCounts.O,
         amountPerEligible: layerEligibleCounts.O > 0
-          ? Number((net.O / layerEligibleCounts.O).toFixed(2))
+          ? round2(net.O / layerEligibleCounts.O)
           : 0
       }
     };
 
-    // Atribuição Individual (rateio da camada * desempenho + valor adicional) e comparativo histórico
+    // 5. Atribuição Individual (grupo dedicado exclusivo OU rateio da camada * desempenho + valor adicional) e comparativo histórico
     let totalDistributed = 0;
     let totalPeriodReceivedAmount = 0;
     const reasonsMap = config.additionalReasons || {};
     const updatedCandidates: BprCandidateResult[] = candidates.map(c => {
-      const periodTotal = Number((c.periodReceivedTotal || 0).toFixed(2));
-      const periodAvg = Number((c.periodReceivedAverage || 0).toFixed(2));
+      const periodTotal = round2(c.periodReceivedTotal || 0);
+      const periodAvg = round2(c.periodReceivedAverage || 0);
       const periodMonths = c.periodMonthsCount || 0;
+      const dedicated = memberAssignment.get(c.employeeId);
 
-      if (c.isEligible) {
-        const baseVal = layers[c.camada]?.amountPerEligible || 0;
-        const rateioVal = Number((baseVal * (c.performanceFactor ?? 1.0)).toFixed(2));
-        const addVal = Math.max(0, Number((Number(additionalMap[c.employeeId] || 0)).toFixed(2)));
+      if (dedicated) {
+        const wasIneligible = !c.isEligible;
+        const baseVal = dedicated.shareAmount;
+        // Grupos dedicados respeitam integralmente o % ou R$ estabelecido (sem corte de 75% de desempenho)
+        const rateioVal = dedicated.shareAmount;
+        const addVal = Math.max(0, round2(Number(additionalMap[c.employeeId] || 0)));
         const addReason = addVal > 0 ? ((reasonsMap[c.employeeId] || '').trim() || undefined) : undefined;
-        const finalVal = Number((rateioVal + addVal).toFixed(2));
+        const finalVal = round2(rateioVal + addVal);
         const bprVsAveragePct = periodAvg > 0 ? Number(((finalVal / periodAvg) * 100).toFixed(1)) : 0;
         const bprVsTotalPct = periodTotal > 0 ? Number(((finalVal / periodTotal) * 100).toFixed(1)) : 0;
 
@@ -639,6 +821,11 @@ export class BprService {
         totalPeriodReceivedAmount += periodTotal;
         return {
           ...c,
+          isEligible: true,
+          isExceptionApplied: c.isExceptionApplied || wasIneligible,
+          dedicatedGroupId: dedicated.groupId,
+          dedicatedGroupName: dedicated.groupName,
+          dedicatedGroupSharePct: dedicated.sharePct,
           baseAmount: baseVal,
           rateioAmount: rateioVal,
           additionalAmount: addVal,
@@ -651,8 +838,41 @@ export class BprService {
           bprVsTotalPct
         };
       }
+
+      if (c.isEligible) {
+        const baseVal = layers[c.camada]?.amountPerEligible || 0;
+        const rateioVal = round2(baseVal * (c.performanceFactor ?? 1.0));
+        const addVal = Math.max(0, round2(Number(additionalMap[c.employeeId] || 0)));
+        const addReason = addVal > 0 ? ((reasonsMap[c.employeeId] || '').trim() || undefined) : undefined;
+        const finalVal = round2(rateioVal + addVal);
+        const bprVsAveragePct = periodAvg > 0 ? Number(((finalVal / periodAvg) * 100).toFixed(1)) : 0;
+        const bprVsTotalPct = periodTotal > 0 ? Number(((finalVal / periodTotal) * 100).toFixed(1)) : 0;
+
+        totalDistributed += finalVal;
+        totalPeriodReceivedAmount += periodTotal;
+        return {
+          ...c,
+          dedicatedGroupId: undefined,
+          dedicatedGroupName: undefined,
+          dedicatedGroupSharePct: undefined,
+          baseAmount: baseVal,
+          rateioAmount: rateioVal,
+          additionalAmount: addVal,
+          additionalReason: addReason,
+          allocatedAmount: finalVal,
+          periodReceivedTotal: periodTotal,
+          periodReceivedAverage: periodAvg,
+          periodMonthsCount: periodMonths,
+          bprVsAveragePct,
+          bprVsTotalPct
+        };
+      }
+
       return {
         ...c,
+        dedicatedGroupId: undefined,
+        dedicatedGroupName: undefined,
+        dedicatedGroupSharePct: undefined,
         baseAmount: 0,
         rateioAmount: 0,
         additionalAmount: 0,
@@ -676,10 +896,10 @@ export class BprService {
       layers[k].bprVsPeriodTotalPct = relativeWeights[k].bprVsPeriodTotalPct;
     });
 
-    const netPoolForLayers = Number((net.E + net.T + net.O).toFixed(2));
-    const totalDistributedRounded = Number(totalDistributed.toFixed(2));
-    const totalPeriodReceivedRounded = Number(totalPeriodReceivedAmount.toFixed(2));
-    const residualAmount = Math.max(0, Number((effectiveTotalPool - totalDistributedRounded).toFixed(2)));
+    const netPoolForLayers = round2(net.E + net.T + net.O);
+    const totalDistributedRounded = round2(totalDistributed);
+    const totalPeriodReceivedRounded = round2(totalPeriodReceivedAmount);
+    const residualAmount = Math.max(0, round2(effectiveTotalPool - totalDistributedRounded));
 
     return {
       totalPoolAmount: effectiveTotalPool,
@@ -689,10 +909,16 @@ export class BprService {
       netPoolForLayers,
       totalPeriodReceivedAmount: totalPeriodReceivedRounded,
       overallRelativeWeight: relativeWeights.overall,
+      dedicatedGroupsTotalPool,
+      dedicatedGroupsAllocatedTotal,
+      dedicatedGroupsExtraBonusTotal,
+      dedicatedGroupsCount: dedicatedGroupSummaries.length,
+      dedicatedMembersCount,
+      dedicatedGroupSummaries,
       totalDistributedAmount: totalDistributedRounded,
       residualAmount,
       totalCandidates: updatedCandidates.length,
-      totalEligible: layerEligibleCounts.E + layerEligibleCounts.T + layerEligibleCounts.O,
+      totalEligible: layerEligibleCounts.E + layerEligibleCounts.T + layerEligibleCounts.O + dedicatedMembersCount,
       totalIneligible: layerIneligibleCounts.E + layerIneligibleCounts.T + layerIneligibleCounts.O,
       layers,
       candidates: updatedCandidates,
@@ -729,7 +955,7 @@ export class BprService {
       let effWeightSum = 0;
 
       candidates.forEach(c => {
-        if (!c.isEligible || c.camada !== k) return;
+        if (!c.isEligible || c.camada !== k || c.dedicatedGroupId) return;
         eligibleCount += 1;
         const avg = Number(c.periodReceivedAverage || 0);
         if (avg > 0) {
@@ -853,9 +1079,9 @@ export class BprService {
     };
 
     return {
-      E: buildWeight(candidates.filter(c => c.camada === 'E')),
-      T: buildWeight(candidates.filter(c => c.camada === 'T')),
-      O: buildWeight(candidates.filter(c => c.camada === 'O')),
+      E: buildWeight(candidates.filter(c => c.camada === 'E' && !c.dedicatedGroupId)),
+      T: buildWeight(candidates.filter(c => c.camada === 'T' && !c.dedicatedGroupId)),
+      O: buildWeight(candidates.filter(c => c.camada === 'O' && !c.dedicatedGroupId)),
       overall: buildWeight(candidates)
     };
   }
@@ -915,6 +1141,12 @@ export class BprService {
         netPoolForLayers: recalculated.netPoolForLayers,
         totalPeriodReceivedAmount: recalculated.totalPeriodReceivedAmount,
         overallRelativeWeight: recalculated.overallRelativeWeight,
+        dedicatedGroupsTotalPool: recalculated.dedicatedGroupsTotalPool,
+        dedicatedGroupsAllocatedTotal: recalculated.dedicatedGroupsAllocatedTotal,
+        dedicatedGroupsExtraBonusTotal: recalculated.dedicatedGroupsExtraBonusTotal,
+        dedicatedGroupsCount: recalculated.dedicatedGroupsCount,
+        dedicatedMembersCount: recalculated.dedicatedMembersCount,
+        dedicatedGroupSummaries: recalculated.dedicatedGroupSummaries,
         totalDistributedAmount: recalculated.totalDistributedAmount,
         residualAmount: recalculated.residualAmount,
         totalCandidates: recalculated.totalCandidates,

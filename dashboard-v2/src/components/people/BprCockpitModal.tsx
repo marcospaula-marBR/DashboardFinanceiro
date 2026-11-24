@@ -8,6 +8,9 @@ import {
   BprCycle, 
   BprCamada, 
   BprAdditionalDeductionSource,
+  BprDedicatedGroup,
+  BprDedicatedGroupDistributionMode,
+  BprDedicatedGroupFundingSource,
   BprCalculationSummary,
   BprSavedScenario,
   BprSavedRun 
@@ -19,7 +22,7 @@ import {
   Award, X, CheckCircle2, AlertTriangle,
   DollarSign, FileText, Printer, Download, Save, FileUp, Sparkles, 
   Search, Calendar, ArrowLeft, FolderArchive, Scale, Trash2, 
-  RotateCcw, Check, Eye, HelpCircle, Copy
+  RotateCcw, Check, Eye, HelpCircle, Copy, Users, Plus
 } from "lucide-react";
 
 interface BprCockpitModalProps {
@@ -43,7 +46,7 @@ export function BprCockpitModal({
 
   // Modos de Visualização e Filtros da Tabela - SEMPRE FOCAR EM ELEGÍVEIS LOGO AO ABRIR
   const [statusFilter, setStatusFilter] = useState<'all' | 'eligible' | 'ineligible'>('eligible');
-  const [camadaFilter, setCamadaFilter] = useState<'all' | BprCamada>('all');
+  const [camadaFilter, setCamadaFilter] = useState<'all' | BprCamada | 'dedicated'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmployeeIdFilter, setSelectedEmployeeIdFilter] = useState<string>('');
 
@@ -51,9 +54,11 @@ export function BprCockpitModal({
   const [isTargetMultiplePanelOpen, setIsTargetMultiplePanelOpen] = useState(false);
   const [targetMultiples, setTargetMultiples] = useState<Record<BprCamada, number>>({ E: 2.0, T: 1.5, O: 1.0 });
   
-  // Modais de Exceções Nominais
+  // Modais de Exceções Nominais & Grupos de Montante Específico
   const [isGlosadosModalOpen, setIsGlosadosModalOpen] = useState(false);
   const [isInativosModalOpen, setIsInativosModalOpen] = useState(false);
+  const [isDedicatedGroupsModalOpen, setIsDedicatedGroupsModalOpen] = useState(false);
+  const [dedicatedMemberSearchByGroup, setDedicatedMemberSearchByGroup] = useState<Record<string, string>>({});
   const [isDocImportModalOpen, setIsDocImportModalOpen] = useState(false);
   const [docImportText, setDocImportText] = useState('');
   const [importedPatch, setImportedPatch] = useState<Partial<BprRuleConfig> | null>(null);
@@ -215,6 +220,131 @@ export function BprCockpitModal({
     }));
   };
 
+  // CRUD de Grupos de Montante Específico (Rateio Exclusivo)
+  const dedicatedGroups = config.dedicatedGroups || [];
+
+  const handleCreateDedicatedGroup = () => {
+    const nextIdx = (config.dedicatedGroups || []).length + 1;
+    const newGroup: BprDedicatedGroup = {
+      id: `bpr-grp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: `Grupo Específico ${nextIdx}`,
+      criteriaDescription: '',
+      enabled: true,
+      poolAmount: 10000,
+      distributionMode: 'equal',
+      fundingSource: 'total_pool',
+      members: [],
+    };
+    setConfig(prev => ({
+      ...prev,
+      allowDedicatedGroups: true,
+      dedicatedGroups: [...(prev.dedicatedGroups || []), newGroup],
+    }));
+  };
+
+  const handleUpdateDedicatedGroup = (groupId: string, patch: Partial<BprDedicatedGroup>) => {
+    setConfig(prev => ({
+      ...prev,
+      dedicatedGroups: (prev.dedicatedGroups || []).map(g => {
+        if (g.id !== groupId) return g;
+        const next: BprDedicatedGroup = { ...g, ...patch };
+        if (patch.distributionMode === 'amount') {
+          const sumAmt = Number(
+            next.members.reduce((acc, m) => acc + Math.max(0, Number(m.amount || 0)), 0).toFixed(2)
+          );
+          if (sumAmt > 0) {
+            next.poolAmount = sumAmt;
+          }
+        }
+        return next;
+      }),
+    }));
+  };
+
+  const handleDeleteDedicatedGroup = (groupId: string) => {
+    setConfig(prev => ({
+      ...prev,
+      dedicatedGroups: (prev.dedicatedGroups || []).filter(g => g.id !== groupId),
+    }));
+  };
+
+  const handleToggleDedicatedGroupMember = (groupId: string, employeeId: string) => {
+    setConfig(prev => ({
+      ...prev,
+      dedicatedGroups: (prev.dedicatedGroups || []).map(g => {
+        if (g.id !== groupId) return g;
+        const exists = g.members.some(m => m.employeeId === employeeId);
+        const nextMembers = exists
+          ? g.members.filter(m => m.employeeId !== employeeId)
+          : [...g.members, { employeeId, percentage: 0, amount: 0 }];
+        const nextPool = g.distributionMode === 'amount'
+          ? Number(nextMembers.reduce((acc, m) => acc + Math.max(0, Number(m.amount || 0)), 0).toFixed(2))
+          : g.poolAmount;
+        return { ...g, members: nextMembers, poolAmount: nextPool };
+      }),
+    }));
+  };
+
+  const handleUpdateDedicatedMemberValue = (
+    groupId: string,
+    employeeId: string,
+    field: 'percentage' | 'amount',
+    rawVal: string
+  ) => {
+    const parsed = parseFloat(rawVal);
+    const sanitized = !isNaN(parsed) && parsed > 0 ? Number(parsed.toFixed(2)) : 0;
+    setConfig(prev => ({
+      ...prev,
+      dedicatedGroups: (prev.dedicatedGroups || []).map(g => {
+        if (g.id !== groupId) return g;
+        const nextMembers = g.members.map(m =>
+          m.employeeId === employeeId ? { ...m, [field]: sanitized } : m
+        );
+        const nextPool = field === 'amount' && g.distributionMode === 'amount'
+          ? Number(nextMembers.reduce((acc, m) => acc + Math.max(0, Number(m.amount || 0)), 0).toFixed(2))
+          : g.poolAmount;
+        return { ...g, members: nextMembers, poolAmount: nextPool };
+      }),
+    }));
+  };
+
+  const handleDistributeDedicatedGroupEquallyPct = (groupId: string) => {
+    setConfig(prev => ({
+      ...prev,
+      dedicatedGroups: (prev.dedicatedGroups || []).map(g => {
+        if (g.id !== groupId || g.members.length === 0) return g;
+        const n = g.members.length;
+        const base = Number((100 / n).toFixed(2));
+        const remainder = Number((100 - base * n).toFixed(2));
+        const nextMembers = g.members.map((m, idx) => ({
+          ...m,
+          percentage: idx === 0 ? Number((base + remainder).toFixed(2)) : base,
+        }));
+        return { ...g, members: nextMembers };
+      }),
+    }));
+  };
+
+  const formatDedicatedFundingLabel = (src: BprDedicatedGroupFundingSource) => {
+    const map: Record<BprDedicatedGroupFundingSource, string> = {
+      total_pool: 'Abate do Bolo Geral',
+      extra_bonus: 'Acréscimo Extra (Não Abate)',
+      E: 'Abate da Camada E',
+      T: 'Abate da Camada T',
+      O: 'Abate da Camada O',
+    };
+    return map[src] || src;
+  };
+
+  const formatDedicatedModeLabel = (mode: BprDedicatedGroupDistributionMode) => {
+    const map: Record<BprDedicatedGroupDistributionMode, string> = {
+      equal: 'Igualitário',
+      percentage: '% por Pessoa',
+      amount: 'Valor Fixo R$',
+    };
+    return map[mode] || mode;
+  };
+
   const formatPctPtBr = (val?: number) =>
     `${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
@@ -300,7 +430,8 @@ export function BprCockpitModal({
       .filter(c => {
         if (statusFilter === 'eligible' && !c.isEligible) return false;
         if (statusFilter === 'ineligible' && c.isEligible) return false;
-        if (camadaFilter !== 'all' && c.camada !== camadaFilter) return false;
+        if (camadaFilter === 'dedicated' && !c.dedicatedGroupId) return false;
+        if (camadaFilter !== 'all' && camadaFilter !== 'dedicated' && c.camada !== camadaFilter) return false;
         return true;
       })
       .map(c => {
@@ -318,12 +449,13 @@ export function BprCockpitModal({
     return summary.candidates.filter(c => {
       if (statusFilter === 'eligible' && !c.isEligible) return false;
       if (statusFilter === 'ineligible' && c.isEligible) return false;
-      if (camadaFilter !== 'all' && c.camada !== camadaFilter) return false;
+      if (camadaFilter === 'dedicated' && !c.dedicatedGroupId) return false;
+      if (camadaFilter !== 'all' && camadaFilter !== 'dedicated' && c.camada !== camadaFilter) return false;
       if (selectedEmployeeIdFilter && c.employeeId !== selectedEmployeeIdFilter) return false;
 
       if (q) {
         const haystack = normalizeSearchText(
-          `${c.name} ${c.corporateName || ''} ${c.responsibleName || ''} ${c.jobRole || ''} ${c.department || ''}`
+          `${c.name} ${c.corporateName || ''} ${c.responsibleName || ''} ${c.jobRole || ''} ${c.department || ''} ${c.dedicatedGroupName || ''}`
         );
         if (!haystack.includes(q)) return false;
       }
@@ -357,8 +489,11 @@ export function BprCockpitModal({
     const addDesc = (summary.totalAdditionalAmount || 0) > 0
       ? ` | Adicionais Individuais: R$ ${(summary.totalAdditionalAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${sourceLabelMap[config.additionalDeductionSource || 'total_pool']})`
       : '';
+    const dedicatedDesc = (summary.dedicatedGroupsCount || 0) > 0
+      ? ` | Grupos de Montante Específico: ${summary.dedicatedGroupsCount} grupo(s) · ${summary.dedicatedMembersCount || 0} pessoa(s) · R$ ${(summary.dedicatedGroupsAllocatedTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+      : '';
 
-    return `Ciclo ${cycleLabel} ${config.year} | Montante R$ ${summary.totalPoolAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ${splitDesc}${addDesc} | ${glosaDesc} | ${inativoDesc} | ${empresasDesc} | ${vinculosDesc}`;
+    return `Ciclo ${cycleLabel} ${config.year} | Montante R$ ${summary.totalPoolAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ${splitDesc}${dedicatedDesc}${addDesc} | ${glosaDesc} | ${inativoDesc} | ${empresasDesc} | ${vinculosDesc}`;
   };
 
   // Abrir Modal de Salvar Cenário
@@ -392,6 +527,12 @@ export function BprCockpitModal({
         netPoolForLayers: summary.netPoolForLayers,
         totalPeriodReceivedAmount: summary.totalPeriodReceivedAmount,
         overallRelativeWeight: summary.overallRelativeWeight,
+        dedicatedGroupsTotalPool: summary.dedicatedGroupsTotalPool,
+        dedicatedGroupsAllocatedTotal: summary.dedicatedGroupsAllocatedTotal,
+        dedicatedGroupsExtraBonusTotal: summary.dedicatedGroupsExtraBonusTotal,
+        dedicatedGroupsCount: summary.dedicatedGroupsCount,
+        dedicatedMembersCount: summary.dedicatedMembersCount,
+        dedicatedGroupSummaries: summary.dedicatedGroupSummaries,
         totalDistributedAmount: summary.totalDistributedAmount,
         residualAmount: summary.residualAmount,
         totalCandidates: summary.totalCandidates,
@@ -1422,9 +1563,11 @@ export function BprCockpitModal({
                   </div>
                   <div>
                     <div className="text-xl font-black text-slate-900 font-mono">{formatCurrency(summary.layers.E.totalLayerAmount)}</div>
-                    {(summary.layers.E.additionalDeductedFromLayer || 0) > 0 && (
+                    {((summary.layers.E.additionalDeductedFromLayer || 0) > 0 || (summary.layers.E.dedicatedGroupsDeductedFromLayer || 0) > 0) && (
                       <div className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 rounded-md px-1.5 py-0.5 mt-1 font-mono">
-                        Bruto: {formatCurrency(summary.layers.E.grossLayerAmount || 0)} · (-) Adic.: -{formatCurrency(summary.layers.E.additionalDeductedFromLayer || 0)}
+                        Bruto: {formatCurrency(summary.layers.E.grossLayerAmount || 0)}
+                        {(summary.layers.E.dedicatedGroupsDeductedFromLayer || 0) > 0 && ` · (-) Grupos: -${formatCurrency(summary.layers.E.dedicatedGroupsDeductedFromLayer || 0)}`}
+                        {(summary.layers.E.additionalDeductedFromLayer || 0) > 0 && ` · (-) Adic.: -${formatCurrency(summary.layers.E.additionalDeductedFromLayer || 0)}`}
                       </div>
                     )}
                     <div className="text-xs text-slate-500 font-bold mt-0.5">
@@ -1455,9 +1598,11 @@ export function BprCockpitModal({
                   </div>
                   <div>
                     <div className="text-xl font-black text-slate-900 font-mono">{formatCurrency(summary.layers.T.totalLayerAmount)}</div>
-                    {(summary.layers.T.additionalDeductedFromLayer || 0) > 0 && (
+                    {((summary.layers.T.additionalDeductedFromLayer || 0) > 0 || (summary.layers.T.dedicatedGroupsDeductedFromLayer || 0) > 0) && (
                       <div className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 rounded-md px-1.5 py-0.5 mt-1 font-mono">
-                        Bruto: {formatCurrency(summary.layers.T.grossLayerAmount || 0)} · (-) Adic.: -{formatCurrency(summary.layers.T.additionalDeductedFromLayer || 0)}
+                        Bruto: {formatCurrency(summary.layers.T.grossLayerAmount || 0)}
+                        {(summary.layers.T.dedicatedGroupsDeductedFromLayer || 0) > 0 && ` · (-) Grupos: -${formatCurrency(summary.layers.T.dedicatedGroupsDeductedFromLayer || 0)}`}
+                        {(summary.layers.T.additionalDeductedFromLayer || 0) > 0 && ` · (-) Adic.: -${formatCurrency(summary.layers.T.additionalDeductedFromLayer || 0)}`}
                       </div>
                     )}
                     <div className="text-xs text-slate-500 font-bold mt-0.5">
@@ -1488,9 +1633,11 @@ export function BprCockpitModal({
                   </div>
                   <div>
                     <div className="text-xl font-black text-slate-900 font-mono">{formatCurrency(summary.layers.O.totalLayerAmount)}</div>
-                    {(summary.layers.O.additionalDeductedFromLayer || 0) > 0 && (
+                    {((summary.layers.O.additionalDeductedFromLayer || 0) > 0 || (summary.layers.O.dedicatedGroupsDeductedFromLayer || 0) > 0) && (
                       <div className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 rounded-md px-1.5 py-0.5 mt-1 font-mono">
-                        Bruto: {formatCurrency(summary.layers.O.grossLayerAmount || 0)} · (-) Adic.: -{formatCurrency(summary.layers.O.additionalDeductedFromLayer || 0)}
+                        Bruto: {formatCurrency(summary.layers.O.grossLayerAmount || 0)}
+                        {(summary.layers.O.dedicatedGroupsDeductedFromLayer || 0) > 0 && ` · (-) Grupos: -${formatCurrency(summary.layers.O.dedicatedGroupsDeductedFromLayer || 0)}`}
+                        {(summary.layers.O.additionalDeductedFromLayer || 0) > 0 && ` · (-) Adic.: -${formatCurrency(summary.layers.O.additionalDeductedFromLayer || 0)}`}
                       </div>
                     )}
                     <div className="text-xs text-slate-500 font-bold mt-0.5">
@@ -1636,7 +1783,7 @@ export function BprCockpitModal({
                   Políticas Especiais de Exceção
                 </span>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Toggle Glosados */}
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
                     <div>
@@ -1722,7 +1869,111 @@ export function BprCockpitModal({
                       )}
                     </div>
                   </div>
+
+                  {/* Toggle Grupos de Montante Específico (Permissão) */}
+                  <div className={`rounded-xl p-3.5 flex items-center justify-between gap-3 border transition-colors ${
+                    config.allowDedicatedGroups
+                      ? 'bg-teal-50/70 border-teal-200'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="min-w-0">
+                      <strong className="text-sm font-black text-slate-800 block">Montante Específico</strong>
+                      <span className="text-xs text-slate-500 block mt-0.5">
+                        {config.allowDedicatedGroups
+                          ? `${summary.dedicatedGroupsCount || 0} grupo(s) · ${summary.dedicatedMembersCount || 0} pessoa(s)`
+                          : 'Desabilitado por padrão'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        aria-label="Habilitar permissão de grupos de montante específico"
+                        onClick={() => {
+                          const newVal = !config.allowDedicatedGroups;
+                          setConfig(prev => ({
+                            ...prev,
+                            allowDedicatedGroups: newVal
+                          }));
+                          if (newVal && dedicatedGroups.length === 0) {
+                            setIsDedicatedGroupsModalOpen(true);
+                          }
+                        }}
+                        className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                          config.allowDedicatedGroups ? 'bg-teal-600' : 'bg-slate-300'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white transition-transform absolute top-1 ${
+                          config.allowDedicatedGroups ? 'left-6' : 'left-1'
+                        }`} />
+                      </button>
+
+                      {config.allowDedicatedGroups && (
+                        <button
+                          type="button"
+                          onClick={() => setIsDedicatedGroupsModalOpen(true)}
+                          className="text-xs font-black text-teal-700 underline hover:text-teal-800 cursor-pointer"
+                        >
+                          Grupos ({dedicatedGroups.length})
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
+
+                {/* Faixa Resumo de Grupos de Montante Específico Ativos */}
+                {config.allowDedicatedGroups && (
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
+                        <Users size={13} className="text-teal-600" />
+                        Grupos de Montante Específico (Rateio Exclusivo fora das Camadas E/T/O)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsDedicatedGroupsModalOpen(true)}
+                        className="min-h-[34px] px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Plus size={13} />
+                        <span>Gerenciar Grupos ({dedicatedGroups.length})</span>
+                      </button>
+                    </div>
+
+                    {(summary.dedicatedGroupSummaries || []).length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {(summary.dedicatedGroupSummaries || []).map(gs => (
+                          <div
+                            key={gs.groupId}
+                            className="bg-teal-50/70 border border-teal-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <strong className="text-xs font-black text-teal-900 block truncate">
+                                {gs.name}
+                              </strong>
+                              <span className="text-[11px] text-teal-700 font-semibold block truncate">
+                                {gs.memberCount} pessoa(s) · {formatDedicatedModeLabel(gs.distributionMode)} · {formatDedicatedFundingLabel(gs.fundingSource)}
+                              </span>
+                            </div>
+                            <div className="text-right shrink-0 font-mono">
+                              <strong className="text-xs font-black text-teal-900 block">
+                                {formatCurrency(gs.allocatedTotal)}
+                              </strong>
+                              {gs.residualAmount > 0 && (
+                                <span className="text-[10px] font-bold text-amber-700 block">
+                                  Res.: {formatCurrency(gs.residualAmount)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500">
+                        Nenhum grupo ativo com colaboradores selecionados. Clique em <strong>Gerenciar Grupos</strong> para criar um grupo e definir o montante específico, a origem do recurso e o critério de rateio.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1800,6 +2051,17 @@ export function BprCockpitModal({
               >
                 Operacional/CLTs
               </button>
+              {(summary.dedicatedMembersCount || 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCamadaFilter('dedicated')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all cursor-pointer ${
+                    camadaFilter === 'dedicated' ? 'bg-teal-600 text-white' : 'text-teal-700 hover:text-teal-800'
+                  }`}
+                >
+                  Grupos ({summary.dedicatedMembersCount})
+                </button>
+              )}
             </div>
 
             {/* Contador / Restauração de Excluídos */}
@@ -1934,11 +2196,26 @@ export function BprCockpitModal({
                           <span className="text-xs text-slate-400">{c.linkType} {c.isOutsourced ? '(Terc.)' : ''}</span>
                         </td>
 
-                        {/* Camada */}
+                        {/* Camada / Grupo Dedicado */}
                         <td className="py-3.5 px-4">
-                          <span className={`inline-block text-xs font-black px-2.5 py-1 rounded-lg border ${camadaBadgeColor}`}>
-                            {c.camada} — {c.camadaLabel}
-                          </span>
+                          {c.dedicatedGroupId ? (
+                            <div className="space-y-1">
+                              <span
+                                className="inline-flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-lg border bg-teal-50 text-teal-800 border-teal-300"
+                                title={`Montante Específico Exclusivo — ${c.dedicatedGroupName} (${formatPctPtBr(c.dedicatedGroupSharePct)} do grupo). Não participa do rateio padrão da camada ${c.camada}.`}
+                              >
+                                <Users size={12} className="text-teal-600 shrink-0" />
+                                <span className="truncate max-w-[150px]">{c.dedicatedGroupName}</span>
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 block">
+                                Origem: {c.camada} · {formatPctPtBr(c.dedicatedGroupSharePct)} do grupo
+                              </span>
+                            </div>
+                          ) : (
+                            <span className={`inline-block text-xs font-black px-2.5 py-1 rounded-lg border ${camadaBadgeColor}`}>
+                              {c.camada} — {c.camadaLabel}
+                            </span>
+                          )}
                         </td>
 
                         {/* Datas */}
@@ -1981,9 +2258,15 @@ export function BprCockpitModal({
                               🚫 Excluído Manualmente
                             </span>
                           ) : c.isEligible ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
-                              <CheckCircle2 size={13} /> Elegível {c.isExceptionApplied ? '(Exceção)' : ''}
-                            </span>
+                            <div className="space-y-0.5">
+                              <span className={`inline-flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-full border ${
+                                c.dedicatedGroupId
+                                  ? 'text-teal-800 bg-teal-50 border-teal-200'
+                                  : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                              }`}>
+                                <CheckCircle2 size={13} /> {c.dedicatedGroupId ? 'Grupo Exclusivo' : 'Elegível'} {c.isExceptionApplied ? '(Exceção)' : ''}
+                              </span>
+                            </div>
                           ) : (
                             <div className="space-y-0.5">
                               <span className="inline-flex items-center gap-1 text-xs font-black text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full">
@@ -1996,19 +2279,23 @@ export function BprCockpitModal({
                           )}
                         </td>
 
-                        {/* Rateio Nível (R$) */}
+                        {/* Rateio Nível / Grupo (R$) */}
                         <td className="py-3.5 px-4 text-right">
                           <div className="space-y-0.5">
                             <span className={`text-sm font-bold font-mono block ${
-                              c.isEligible ? 'text-slate-700' : 'text-slate-300'
+                              c.isEligible ? (c.dedicatedGroupId ? 'text-teal-800' : 'text-slate-700') : 'text-slate-300'
                             }`}>
                               {c.isEligible ? formatCurrency(c.rateioAmount ?? c.allocatedAmount) : 'R$ 0,00'}
                             </span>
-                            {c.isEligible && c.performanceFactor < 1.0 && (
+                            {c.isEligible && c.dedicatedGroupId ? (
+                              <span className="text-[11px] text-teal-700 block font-mono">
+                                Montante Específico ({formatPctPtBr(c.dedicatedGroupSharePct)})
+                              </span>
+                            ) : c.isEligible && c.performanceFactor < 1.0 ? (
                               <span className="text-[11px] text-amber-600 block font-mono">
                                 Base: {formatCurrency(c.baseAmount)} (75%)
                               </span>
-                            )}
+                            ) : null}
                           </div>
                         </td>
 
@@ -2186,6 +2473,18 @@ export function BprCockpitModal({
                 {summary.totalEligible} contratados
               </strong>
             </div>
+
+            {(summary.dedicatedGroupsAllocatedTotal || 0) > 0 && (
+              <div>
+                <span className="text-xs font-bold text-teal-600 uppercase block tracking-wider">Grupos Específicos:</span>
+                <strong className="text-base font-black text-teal-700 font-mono">
+                  {formatCurrency(summary.dedicatedGroupsAllocatedTotal || 0)}
+                </strong>
+                <span className="text-[11px] font-bold text-teal-600/80 ml-1">
+                  ({summary.dedicatedMembersCount || 0}p)
+                </span>
+              </div>
+            )}
 
             {totalAdditionalAmount > 0 && (
               <>
@@ -3954,6 +4253,523 @@ export function BprCockpitModal({
                   <span>Baixar Arquivo PDF</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL DE GESTÃO DE GRUPOS DE MONTANTE ESPECÍFICO (RATEIO EXCLUSIVO) ── */}
+      {isDedicatedGroupsModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-2 sm:p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="px-4 sm:px-6 py-4 border-b border-slate-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Users size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">
+                    Grupos de Montante Específico (Rateio Exclusivo)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Colaboradores em grupos ativos deixam o rateio padrão E/T/O e dividem apenas o montante do grupo (sem corte de 75%).
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCreateDedicatedGroup}
+                  className="min-h-[42px] px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+                >
+                  <Plus size={15} />
+                  <span>Novo Grupo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDedicatedGroupsModalOpen(false)}
+                  aria-label="Fechar gestão de grupos"
+                  className="min-w-[42px] min-h-[42px] flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-5 bg-slate-50">
+              {dedicatedGroups.length === 0 ? (
+                <div className="bg-white border border-dashed border-teal-300 rounded-2xl p-6 sm:p-8 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 border border-teal-200 flex items-center justify-center mx-auto">
+                    <Users size={24} />
+                  </div>
+                  <div className="space-y-1 max-w-lg mx-auto">
+                    <h4 className="text-sm sm:text-base font-black text-slate-900">
+                      Nenhum grupo de montante específico criado ainda
+                    </h4>
+                    <p className="text-xs sm:text-sm text-slate-500">
+                      Crie um ou mais grupos para destinar um montante exclusivo a colaboradores selecionados, escolhendo rateio <strong>Igualitário</strong>, por <strong>Percentual (%)</strong> ou por <strong>Valor Absoluto (R$)</strong> e definindo a origem do recurso.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCreateDedicatedGroup}
+                    className="min-h-[44px] px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider inline-flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95"
+                  >
+                    <Plus size={16} />
+                    <span>Criar Primeiro Grupo Específico</span>
+                  </button>
+                </div>
+              ) : (
+                dedicatedGroups.map(group => {
+                  const memberIdsSet = new Set(group.members.map(m => m.employeeId));
+                  const claimedByOtherGroup = new Map<string, string>();
+                  dedicatedGroups.forEach(other => {
+                    if (other.id === group.id || !other.enabled) return;
+                    other.members.forEach(m => {
+                      if (!claimedByOtherGroup.has(m.employeeId)) {
+                        claimedByOtherGroup.set(m.employeeId, other.name || 'Outro Grupo');
+                      }
+                    });
+                  });
+
+                  const candidateMap = new Map<string, BprCandidateResult>();
+                  summary.candidates.forEach(c => candidateMap.set(c.employeeId, c));
+
+                  const totalPct = Number(
+                    group.members.reduce((acc, m) => acc + Math.max(0, Number(m.percentage || 0)), 0).toFixed(2)
+                  );
+                  const totalMemberAmt = Number(
+                    group.members.reduce((acc, m) => acc + Math.max(0, Number(m.amount || 0)), 0).toFixed(2)
+                  );
+                  const groupSummary = (summary.dedicatedGroupSummaries || []).find(s => s.groupId === group.id);
+                  const searchTerm = dedicatedMemberSearchByGroup[group.id] || '';
+                  const normSearch = normalizeSearchText(searchTerm);
+
+                  const filteredCandidatesForGroup = summary.candidates
+                    .filter(c => {
+                      if (!normSearch) return true;
+                      const hay = normalizeSearchText(
+                        `${c.name} ${c.corporateName || ''} ${c.responsibleName || ''} ${c.jobRole || ''} ${c.department || ''} ${c.company || ''}`
+                      );
+                      return hay.includes(normSearch);
+                    })
+                    .sort((a, b) => {
+                      const aSel = memberIdsSet.has(a.employeeId) ? 0 : 1;
+                      const bSel = memberIdsSet.has(b.employeeId) ? 0 : 1;
+                      if (aSel !== bSel) return aSel - bSel;
+                      return (a.corporateName || a.name).localeCompare(b.corporateName || b.name, 'pt-BR');
+                    });
+
+                  return (
+                    <div
+                      key={group.id}
+                      className={`bg-white rounded-2xl border p-4 sm:p-5 space-y-4 shadow-sm ${
+                        group.enabled ? 'border-teal-200' : 'border-slate-200 opacity-75'
+                      }`}
+                    >
+                      {/* Cabeçalho do Card de Grupo */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                        <div className="flex-1 min-w-[200px] space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                            Nome do Grupo
+                          </label>
+                          <input
+                            type="text"
+                            value={group.name}
+                            maxLength={80}
+                            onChange={e => handleUpdateDedicatedGroup(group.id, { name: e.target.value })}
+                            placeholder="Ex: Equipe Projeto X, Liderança Comercial..."
+                            className="w-full min-h-[40px] bg-slate-50 border border-slate-200 focus:border-teal-500 focus:bg-white rounded-xl px-3 py-1.5 text-sm font-black text-slate-900 outline-none"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-4">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateDedicatedGroup(group.id, { enabled: !group.enabled })}
+                            className={`min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                              group.enabled
+                                ? 'bg-teal-50 text-teal-800 border-teal-300 hover:bg-teal-100'
+                                : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                            }`}
+                          >
+                            {group.enabled ? '✓ Ativo' : 'Pausado'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDedicatedGroup(group.id)}
+                            aria-label={`Excluir grupo ${group.name}`}
+                            title="Excluir grupo"
+                            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Critério / Justificativa */}
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                          Critério / Justificativa Executiva (exibida nos relatórios PDF)
+                        </label>
+                        <input
+                          type="text"
+                          value={group.criteriaDescription || ''}
+                          maxLength={160}
+                          onChange={e => handleUpdateDedicatedGroup(group.id, { criteriaDescription: e.target.value })}
+                          placeholder="Ex: Rateio exclusivo por entrega estratégica de projeto ou metas diferenciadas"
+                          className="w-full min-h-[38px] bg-white border border-slate-200 focus:border-teal-500 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 outline-none"
+                        />
+                      </div>
+
+                      {/* Parâmetros Financeiros do Grupo */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                            Montante do Grupo (R$)
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="500"
+                              disabled={group.distributionMode === 'amount'}
+                              value={group.distributionMode === 'amount' ? totalMemberAmt : group.poolAmount}
+                              onChange={e => {
+                                const v = Math.max(0, parseFloat(e.target.value) || 0);
+                                handleUpdateDedicatedGroup(group.id, { poolAmount: Number(v.toFixed(2)) });
+                              }}
+                              className={`w-full min-h-[42px] pl-9 pr-3 py-2 rounded-xl border font-mono font-black text-sm outline-none ${
+                                group.distributionMode === 'amount'
+                                  ? 'bg-slate-50 border-slate-200 text-teal-800'
+                                  : 'bg-white border-teal-300 text-teal-800 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15'
+                              }`}
+                            />
+                          </div>
+                          {group.distributionMode === 'amount' && (
+                            <span className="text-[10px] text-teal-700 font-semibold block mt-0.5">
+                              Soma automática dos valores por colaborador
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                            Critério de Rateio entre Membros
+                          </label>
+                          <select
+                            value={group.distributionMode}
+                            onChange={e =>
+                              handleUpdateDedicatedGroup(group.id, {
+                                distributionMode: e.target.value as BprDedicatedGroupDistributionMode,
+                              })
+                            }
+                            className="w-full min-h-[42px] bg-white border border-slate-300 focus:border-teal-500 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                          >
+                            <option value="equal">Igualitário entre selecionados</option>
+                            <option value="percentage">Percentual (%) por colaborador</option>
+                            <option value="amount">Valor Absoluto (R$) por colaborador</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                            Origem do Recurso
+                          </label>
+                          <select
+                            value={group.fundingSource}
+                            onChange={e =>
+                              handleUpdateDedicatedGroup(group.id, {
+                                fundingSource: e.target.value as BprDedicatedGroupFundingSource,
+                              })
+                            }
+                            className="w-full min-h-[42px] bg-white border border-slate-300 focus:border-teal-500 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                          >
+                            <option value="total_pool">Abater do Bolo Geral (Proporcional E/T/O)</option>
+                            <option value="extra_bonus">Acréscimo Extra ao Total (Não Abate)</option>
+                            <option value="E">Abater da Camada Estratégico (E)</option>
+                            <option value="T">Abater da Camada Tático (T)</option>
+                            <option value="O">Abater da Camada Operacional/CLTs (O)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Membros Selecionados & Critérios Individuais */}
+                      <div className="bg-teal-50/50 border border-teal-200/80 rounded-xl p-3 sm:p-4 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-black text-teal-900 uppercase tracking-wider">
+                            Membros Selecionados ({group.members.length})
+                          </span>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {group.distributionMode === 'percentage' && group.members.length > 0 && (
+                              <>
+                                <span
+                                  className={`text-[11px] font-black font-mono px-2 py-0.5 rounded-full border ${
+                                    Math.abs(totalPct - 100) <= 0.05
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                      : 'bg-amber-50 text-amber-800 border-amber-300'
+                                  }`}
+                                >
+                                  Soma: {formatPctPtBr(totalPct)} {Math.abs(totalPct - 100) <= 0.05 ? '✓' : ''}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDistributeDedicatedGroupEquallyPct(group.id)}
+                                  className="min-h-[32px] px-2.5 py-1 rounded-lg bg-white hover:bg-teal-50 text-teal-800 border border-teal-300 text-[11px] font-black cursor-pointer"
+                                >
+                                  Dividir Igual (%)
+                                </button>
+                              </>
+                            )}
+                            {groupSummary && (
+                              <span className="text-xs font-black font-mono text-teal-900 bg-white border border-teal-200 px-2.5 py-0.5 rounded-full">
+                                Alocado: {formatCurrency(groupSummary.allocatedTotal)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {group.members.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic">
+                            Selecione colaboradores na lista abaixo para incluí-los neste grupo exclusivo.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {group.members.map(m => {
+                              const cand = candidateMap.get(m.employeeId);
+                              const labelName = cand
+                                ? (cand.corporateName || cand.name)
+                                : m.employeeId;
+                              const isException = cand ? cand.ineligibilityReasons.length > 0 : false;
+                              const liveShare =
+                                group.distributionMode === 'equal'
+                                  ? (group.members.length > 0 ? Number((group.poolAmount / group.members.length).toFixed(2)) : 0)
+                                  : group.distributionMode === 'percentage'
+                                    ? Number(((group.poolAmount * Math.max(0, Number(m.percentage || 0))) / 100).toFixed(2))
+                                    : Math.max(0, Number(m.amount || 0));
+                              const livePct =
+                                group.distributionMode === 'equal'
+                                  ? (group.members.length > 0 ? Number((100 / group.members.length).toFixed(1)) : 0)
+                                  : group.distributionMode === 'percentage'
+                                    ? Number(m.percentage || 0)
+                                    : (totalMemberAmt > 0 ? Number(((liveShare / totalMemberAmt) * 100).toFixed(1)) : 0);
+
+                              return (
+                                <div
+                                  key={m.employeeId}
+                                  className="bg-white border border-teal-200/80 rounded-xl px-3 py-2 flex flex-wrap items-center justify-between gap-2"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <strong className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                                        {labelName}
+                                      </strong>
+                                      {cand && (
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                          {cand.camada} · {cand.company}
+                                        </span>
+                                      )}
+                                      {isException && (
+                                        <span
+                                          className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200"
+                                          title={cand?.ineligibilityReasons.join(', ')}
+                                        >
+                                          Exceção incluída
+                                        </span>
+                                      )}
+                                    </div>
+                                    {cand && (
+                                      <span className="text-[11px] text-slate-400 block truncate">
+                                        {cand.jobRole} · {cand.department}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {group.distributionMode === 'percentage' && (
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max="100"
+                                          step="1"
+                                          aria-label={`Percentual para ${labelName}`}
+                                          value={m.percentage || ''}
+                                          placeholder="0"
+                                          onChange={e =>
+                                            handleUpdateDedicatedMemberValue(group.id, m.employeeId, 'percentage', e.target.value)
+                                          }
+                                          className="w-20 min-h-[38px] bg-slate-50 border border-teal-300 rounded-lg px-2 py-1 text-right font-mono font-black text-xs text-teal-900 outline-none focus:bg-white focus:border-teal-500"
+                                        />
+                                        <span className="text-xs font-black text-slate-500">%</span>
+                                      </div>
+                                    )}
+
+                                    {group.distributionMode === 'amount' && (
+                                      <div className="relative">
+                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400">R$</span>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="100"
+                                          aria-label={`Valor em reais para ${labelName}`}
+                                          value={m.amount || ''}
+                                          placeholder="0,00"
+                                          onChange={e =>
+                                            handleUpdateDedicatedMemberValue(group.id, m.employeeId, 'amount', e.target.value)
+                                          }
+                                          className="w-28 min-h-[38px] pl-7 pr-2 py-1 bg-slate-50 border border-teal-300 rounded-lg text-right font-mono font-black text-xs text-teal-900 outline-none focus:bg-white focus:border-teal-500"
+                                        />
+                                      </div>
+                                    )}
+
+                                    <div className="text-right font-mono min-w-[92px]">
+                                      <strong className="text-xs font-black text-emerald-700 block">
+                                        {formatCurrency(liveShare)}
+                                      </strong>
+                                      <span className="text-[10px] font-bold text-slate-400 block">
+                                        {formatPctPtBr(livePct)}
+                                      </span>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleDedicatedGroupMember(group.id, m.employeeId)}
+                                      aria-label={`Remover ${labelName} do grupo`}
+                                      className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                                    >
+                                      <X size={15} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Seletor de Colaboradores para o Grupo */}
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={e =>
+                              setDedicatedMemberSearchByGroup(prev => ({ ...prev, [group.id]: e.target.value }))
+                            }
+                            placeholder="Buscar colaborador para adicionar ao grupo (nome, razão social, cargo ou empresa)..."
+                            className="w-full min-h-[40px] bg-white border border-slate-200 focus:border-teal-500 rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-800 outline-none"
+                          />
+                          {searchTerm && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDedicatedMemberSearchByGroup(prev => ({ ...prev, [group.id]: '' }))
+                              }
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl bg-white">
+                          {filteredCandidatesForGroup.length === 0 ? (
+                            <div className="py-6 text-center text-xs text-slate-400">
+                              Nenhum colaborador encontrado para essa busca.
+                            </div>
+                          ) : (
+                            filteredCandidatesForGroup.map(c => {
+                              const isSelected = memberIdsSet.has(c.employeeId);
+                              const otherGroupName = claimedByOtherGroup.get(c.employeeId);
+                              const isManExcl = (config.manuallyExcludedEmployeeIds || []).includes(c.employeeId);
+                              const isDisabled = Boolean(otherGroupName || isManExcl);
+                              const isExceptionCandidate = c.ineligibilityReasons.length > 0 && !isManExcl;
+                              const label = c.corporateName || c.name;
+
+                              return (
+                                <label
+                                  key={c.employeeId}
+                                  className={`flex items-center justify-between gap-2 px-3 py-2.5 text-xs transition-colors ${
+                                    isDisabled
+                                      ? 'opacity-50 cursor-not-allowed bg-slate-50'
+                                      : isSelected
+                                        ? 'bg-teal-50/70 cursor-pointer'
+                                        : 'hover:bg-slate-50 cursor-pointer'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <input
+                                      type="checkbox"
+                                      disabled={isDisabled}
+                                      checked={isSelected}
+                                      onChange={() => handleToggleDedicatedGroupMember(group.id, c.employeeId)}
+                                      className="w-4 h-4 rounded text-teal-600 border-slate-300 shrink-0"
+                                    />
+                                    <div className="min-w-0">
+                                      <strong className="text-slate-900 font-bold block truncate">{label}</strong>
+                                      <span className="text-[11px] text-slate-400 block truncate">
+                                        {c.jobRole} · {c.company} · Camada {c.camada}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {otherGroupName ? (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                                        Em: {otherGroupName}
+                                      </span>
+                                    ) : isManExcl ? (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200">
+                                        Excluído
+                                      </span>
+                                    ) : isExceptionCandidate ? (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                        Exceção permitida
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Elegível
+                                      </span>
+                                    )}
+                                  </div>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 sm:px-6 py-4 border-t border-slate-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="text-xs font-mono space-y-0.5">
+                <span className="font-sans text-[11px] font-bold text-slate-500 block">
+                  {summary.dedicatedGroupsCount || 0} grupo(s) ativo(s) · {summary.dedicatedMembersCount || 0} colaborador(es) exclusivo(s)
+                </span>
+                <strong className="text-sm font-black text-teal-800 block">
+                  Total Alocado nos Grupos: {formatCurrency(summary.dedicatedGroupsAllocatedTotal || 0)}
+                </strong>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsDedicatedGroupsModalOpen(false)}
+                className="min-h-[44px] px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-md transition-all cursor-pointer active:scale-95"
+              >
+                Concluir &amp; Aplicar
+              </button>
             </div>
           </div>
         </div>

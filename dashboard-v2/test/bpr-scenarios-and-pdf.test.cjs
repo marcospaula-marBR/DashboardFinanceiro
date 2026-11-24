@@ -1106,4 +1106,180 @@ assert.strictEqual(filterByNameTokens(listForNameFilter, 'joao, maria').length, 
 
 console.log('   ✅ Modo Acréscimo de Bônus (extra_bonus), Simulador de Meta por Múltiplo (x) e Filtro por Nome validados com 100% de precisão!');
 
+// 21. Testando Permissão e Grupos de Montante Específico (Rateio Exclusivo — Igualitário, % e R$ Absoluto)
+console.log('\n21. Testando Grupos de Montante Específico (Exclusividade, Origem do Recurso, Sem Corte 75%, Exceções e Múltiplos Grupos)...');
+
+const dedicatedTestCandidates = [
+  { employeeId: 'dg-e1', name: 'Diretor 1', camada: 'E', isEligible: true, isExceptionApplied: false, isManuallyExcluded: false, ineligibilityReasons: [], performanceFactor: 1.0, periodReceivedAverage: 20000, periodReceivedTotal: 120000, periodMonthsCount: 6 },
+  { employeeId: 'dg-e2', name: 'Diretor 2 (75% meta)', camada: 'E', isEligible: true, isExceptionApplied: false, isManuallyExcluded: false, ineligibilityReasons: [], performanceFactor: 0.75, periodReceivedAverage: 20000, periodReceivedTotal: 120000, periodMonthsCount: 6 },
+  { employeeId: 'dg-t1', name: 'Gerente 1', camada: 'T', isEligible: true, isExceptionApplied: false, isManuallyExcluded: false, ineligibilityReasons: [], performanceFactor: 1.0, periodReceivedAverage: 10000, periodReceivedTotal: 60000, periodMonthsCount: 6 },
+  { employeeId: 'dg-t2', name: 'Gerente 2', camada: 'T', isEligible: true, isExceptionApplied: false, isManuallyExcluded: false, ineligibilityReasons: [], performanceFactor: 1.0, periodReceivedAverage: 10000, periodReceivedTotal: 60000, periodMonthsCount: 6 },
+  { employeeId: 'dg-o1', name: 'Analista 1', camada: 'O', isEligible: true, isExceptionApplied: false, isManuallyExcluded: false, ineligibilityReasons: [], performanceFactor: 1.0, periodReceivedAverage: 5000, periodReceivedTotal: 30000, periodMonthsCount: 6 },
+  { employeeId: 'dg-ineleg', name: 'Recem Admitido', camada: 'O', isEligible: false, isExceptionApplied: false, isManuallyExcluded: false, ineligibilityReasons: ['Admissão posterior ao início'], performanceFactor: 0.75, periodReceivedAverage: 4000, periodReceivedTotal: 12000, periodMonthsCount: 3 },
+  { employeeId: 'dg-excl', name: 'Excluido Manual', camada: 'O', isEligible: false, isExceptionApplied: false, isManuallyExcluded: true, ineligibilityReasons: ['Excluído manualmente do rateio'], performanceFactor: 1.0, periodReceivedAverage: 4000, periodReceivedTotal: 24000, periodMonthsCount: 6 },
+];
+
+// 21A. Permissão DESLIGADA (allowDedicatedGroups: false) — ignora totalmente grupos cadastrados
+const cfgDedicatedOff = {
+  ...RealBprService.getDefaultConfig('ciclo_1', 2026),
+  totalPoolAmount: 100000,
+  splitMode: 'percentage',
+  tierSplits: { E: 30, T: 40, O: 30 },
+  allowDedicatedGroups: false,
+  dedicatedGroups: [
+    {
+      id: 'g1',
+      name: 'Projeto X',
+      enabled: true,
+      poolAmount: 20000,
+      distributionMode: 'percentage',
+      fundingSource: 'total_pool',
+      members: [{ employeeId: 'dg-e2', percentage: 60 }, { employeeId: 'dg-ineleg', percentage: 40 }],
+    },
+  ],
+};
+const resOff = RealBprService.recalculateSnapshotWithNewConfig(dedicatedTestCandidates, cfgDedicatedOff);
+assert.strictEqual(resOff.dedicatedGroupsCount, 0);
+assert.strictEqual(resOff.dedicatedMembersCount, 0);
+assert.strictEqual(resOff.layers.E.eligibleCount, 2); // dg-e2 continua na camada E
+assert.strictEqual(resOff.layers.E.totalLayerAmount, 30000);
+assert.strictEqual(resOff.candidates.find(c => c.employeeId === 'dg-ineleg').isEligible, false);
+
+// 21B. Permissão LIGADA + Exclusividade + % por colaborador + Sem corte de 75% + Exceção de inelegível + Abate do Bolo Geral (total_pool)
+const cfgDedicatedPct = {
+  ...cfgDedicatedOff,
+  allowDedicatedGroups: true,
+  dedicatedGroups: [
+    {
+      id: 'g-pct',
+      name: 'Projeto Alpha',
+      criteriaDescription: 'Entrega crítica cliente',
+      enabled: true,
+      poolAmount: 20000,
+      distributionMode: 'percentage',
+      fundingSource: 'total_pool', // Abate 20k proporcionalmente de E(30k->24k), T(40k->32k), O(30k->24k)
+      members: [
+        { employeeId: 'dg-e2', percentage: 60 },      // tinha performanceFactor 0.75 -> deve receber 100% dos 60% = R$ 12.000!
+        { employeeId: 'dg-ineleg', percentage: 40 },  // era inelegível -> promovido como exceção e recebe 40% = R$ 8.000!
+        { employeeId: 'dg-excl', percentage: 10 },    // excluído manualmente -> ignorado!
+      ],
+    },
+  ],
+};
+const resPct = RealBprService.recalculateSnapshotWithNewConfig(dedicatedTestCandidates, cfgDedicatedPct);
+assert.strictEqual(resPct.dedicatedGroupsCount, 1);
+assert.strictEqual(resPct.dedicatedMembersCount, 2);
+assert.strictEqual(resPct.dedicatedGroupsTotalPool, 20000);
+assert.strictEqual(resPct.dedicatedGroupsAllocatedTotal, 20000);
+assert.strictEqual(resPct.dedicatedGroupsExtraBonusTotal, 0);
+// Exclusividade: Camada E fica apenas com dg-e1 (1 elegível, em vez de 2)
+assert.strictEqual(resPct.layers.E.eligibleCount, 1);
+assert.strictEqual(resPct.layers.E.dedicatedGroupsDeductedFromLayer, 6000);
+assert.strictEqual(resPct.layers.E.totalLayerAmount, 24000);
+assert.strictEqual(resPct.layers.E.amountPerEligible, 24000);
+assert.strictEqual(resPct.layers.T.dedicatedGroupsDeductedFromLayer, 8000);
+assert.strictEqual(resPct.layers.T.totalLayerAmount, 32000);
+assert.strictEqual(resPct.layers.O.dedicatedGroupsDeductedFromLayer, 6000);
+assert.strictEqual(resPct.layers.O.totalLayerAmount, 24000);
+// Membros do grupo dedicado
+const e2Res = resPct.candidates.find(c => c.employeeId === 'dg-e2');
+assert.strictEqual(e2Res.isEligible, true);
+assert.strictEqual(e2Res.dedicatedGroupId, 'g-pct');
+assert.strictEqual(e2Res.dedicatedGroupName, 'Projeto Alpha');
+assert.strictEqual(e2Res.dedicatedGroupSharePct, 60);
+assert.strictEqual(e2Res.allocatedAmount, 12000); // SEM corte de 75%!
+const inelRes = resPct.candidates.find(c => c.employeeId === 'dg-ineleg');
+assert.strictEqual(inelRes.isEligible, true);
+assert.strictEqual(inelRes.isExceptionApplied, true);
+assert.strictEqual(inelRes.dedicatedGroupId, 'g-pct');
+assert.strictEqual(inelRes.allocatedAmount, 8000);
+const exclRes = resPct.candidates.find(c => c.employeeId === 'dg-excl');
+assert.strictEqual(exclRes.isEligible, false);
+assert.strictEqual(exclRes.allocatedAmount, 0);
+// Total distribuído: 24k (E) + 32k (T) + 24k (O) + 20k (Grupo) = 100.000
+assert.strictEqual(resPct.totalDistributedAmount, 100000);
+assert.strictEqual(resPct.residualAmount, 0);
+assert.strictEqual(resPct.totalEligible, 6); // 1(E) + 2(T) + 1(O) + 2(Grupo)
+
+// 21C. Múltiplos grupos: Grupo 1 (Valor Absoluto R$ abatido da Camada E) + Grupo 2 (Igualitário como Acréscimo Extra) + proteção contra duplicidade de membro
+const cfgMultiGroups = {
+  ...cfgDedicatedOff,
+  allowDedicatedGroups: true,
+  dedicatedGroups: [
+    {
+      id: 'g-abs',
+      name: 'Diretoria Especial',
+      enabled: true,
+      poolAmount: 0, // Em modo 'amount', assume automaticamente a soma dos valores individuais (10k)
+      distributionMode: 'amount',
+      fundingSource: 'E', // Abate 10k direto da camada E (30k -> 20k)
+      members: [{ employeeId: 'dg-e2', amount: 10000 }],
+    },
+    {
+      id: 'g-eq-extra',
+      name: 'Comercial Extra',
+      enabled: true,
+      poolAmount: 15000,
+      distributionMode: 'equal',
+      fundingSource: 'extra_bonus', // Acréscimo extra sobre o montante total (100k + 15k = 115k)
+      members: [
+        { employeeId: 'dg-e2' }, // Já está no Grupo 1 ativo -> ignorado aqui para evitar pagamento duplo!
+        { employeeId: 'dg-t2' },
+        { employeeId: 'dg-o1' },
+      ],
+    },
+    {
+      id: 'g-paused',
+      name: 'Grupo Pausado',
+      enabled: false,
+      poolAmount: 50000,
+      distributionMode: 'equal',
+      fundingSource: 'total_pool',
+      members: [{ employeeId: 'dg-e1' }],
+    },
+  ],
+};
+const resMulti = RealBprService.recalculateSnapshotWithNewConfig(dedicatedTestCandidates, cfgMultiGroups);
+assert.strictEqual(resMulti.dedicatedGroupsCount, 2); // Pausado ignorado
+assert.strictEqual(resMulti.dedicatedMembersCount, 3); // dg-e2 (G1), dg-t2 e dg-o1 (G2)
+assert.strictEqual(resMulti.basePoolAmount, 100000);
+assert.strictEqual(resMulti.dedicatedGroupsExtraBonusTotal, 15000);
+assert.strictEqual(resMulti.totalPoolAmount, 115000);
+assert.strictEqual(resMulti.layers.E.dedicatedGroupsDeductedFromLayer, 10000);
+assert.strictEqual(resMulti.layers.E.totalLayerAmount, 20000);
+assert.strictEqual(resMulti.layers.E.eligibleCount, 1); // dg-e1
+assert.strictEqual(resMulti.layers.T.dedicatedGroupsDeductedFromLayer, 0);
+assert.strictEqual(resMulti.layers.T.totalLayerAmount, 40000);
+assert.strictEqual(resMulti.layers.T.eligibleCount, 1); // apenas dg-t1 (dg-t2 foi pro G2)
+assert.strictEqual(resMulti.layers.O.eligibleCount, 0); // dg-o1 foi pro G2 -> 30k vira resíduo (camada O sem elegíveis)
+assert.strictEqual(resMulti.candidates.find(c => c.employeeId === 'dg-e2').allocatedAmount, 10000);
+assert.strictEqual(resMulti.candidates.find(c => c.employeeId === 'dg-e2').dedicatedGroupId, 'g-abs');
+assert.strictEqual(resMulti.candidates.find(c => c.employeeId === 'dg-t2').allocatedAmount, 7500);
+assert.strictEqual(resMulti.candidates.find(c => c.employeeId === 'dg-o1').allocatedAmount, 7500);
+assert.strictEqual(resMulti.totalDistributedAmount, 85000); // 20k (E) + 40k (T) + 0 (O) + 10k (G1) + 15k (G2)
+assert.strictEqual(resMulti.residualAmount, 30000); // 115k - 85k = 30k da camada O sem membros
+
+// 21D. Valores zerados / negativos sanitizados para 0 sem NaN
+const cfgNegativeSanitize = {
+  ...cfgDedicatedOff,
+  allowDedicatedGroups: true,
+  dedicatedGroups: [
+    {
+      id: 'g-neg',
+      name: 'Teste Sanitização',
+      enabled: true,
+      poolAmount: -5000,
+      distributionMode: 'percentage',
+      fundingSource: 'total_pool',
+      members: [{ employeeId: 'dg-e1', percentage: -20 }],
+    },
+  ],
+};
+const resNeg = RealBprService.recalculateSnapshotWithNewConfig(dedicatedTestCandidates, cfgNegativeSanitize);
+assert.strictEqual(resNeg.dedicatedGroupsAllocatedTotal, 0);
+assert.strictEqual(resNeg.candidates.find(c => c.employeeId === 'dg-e1').allocatedAmount, 0);
+assert.strictEqual(Number.isNaN(resNeg.totalDistributedAmount), false);
+
+console.log('   ✅ Grupos de Montante Específico (exclusividade, %, R$, igualitário, origens de recurso, exceções e proteção contra duplicidade) validados com 100% de precisão!');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

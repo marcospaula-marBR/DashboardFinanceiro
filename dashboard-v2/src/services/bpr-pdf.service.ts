@@ -290,7 +290,7 @@ export class BprPdfService {
           'Estratégico (E)',
           `${summary.layers.E.allocatedPercentage}%`,
           formatCurrency(summary.layers.E.grossLayerAmount ?? summary.layers.E.totalLayerAmount),
-          formatCurrency(summary.layers.E.additionalDeductedFromLayer || 0),
+          formatCurrency((summary.layers.E.dedicatedGroupsDeductedFromLayer || 0) + (summary.layers.E.additionalDeductedFromLayer || 0)),
           formatCurrency(summary.layers.E.totalLayerAmount),
           `${summary.layers.E.eligibleCount} colaborador(es)`,
           formatCurrency(summary.layers.E.amountPerEligible),
@@ -300,7 +300,7 @@ export class BprPdfService {
           'Tático (T)',
           `${summary.layers.T.allocatedPercentage}%`,
           formatCurrency(summary.layers.T.grossLayerAmount ?? summary.layers.T.totalLayerAmount),
-          formatCurrency(summary.layers.T.additionalDeductedFromLayer || 0),
+          formatCurrency((summary.layers.T.dedicatedGroupsDeductedFromLayer || 0) + (summary.layers.T.additionalDeductedFromLayer || 0)),
           formatCurrency(summary.layers.T.totalLayerAmount),
           `${summary.layers.T.eligibleCount} colaborador(es)`,
           formatCurrency(summary.layers.T.amountPerEligible),
@@ -310,7 +310,7 @@ export class BprPdfService {
           'Operacional / CLTs (O)',
           `${summary.layers.O.allocatedPercentage}%`,
           formatCurrency(summary.layers.O.grossLayerAmount ?? summary.layers.O.totalLayerAmount),
-          formatCurrency(summary.layers.O.additionalDeductedFromLayer || 0),
+          formatCurrency((summary.layers.O.dedicatedGroupsDeductedFromLayer || 0) + (summary.layers.O.additionalDeductedFromLayer || 0)),
           formatCurrency(summary.layers.O.totalLayerAmount),
           `${summary.layers.O.eligibleCount} colaborador(es)`,
           formatCurrency(summary.layers.O.amountPerEligible),
@@ -320,7 +320,7 @@ export class BprPdfService {
 
       autoTable(doc, {
         startY: nextY,
-        head: [['Camada / Perfil', 'Rateio (%)', 'Montante Bruto', '(-) Adic. Abatido', 'Montante Líquido', 'Elegíveis Globais', 'Valor Base / Pessoa', 'Peso BPR / Média Mensal']],
+        head: [['Camada / Perfil', 'Rateio (%)', 'Montante Bruto', '(-) Abatimentos', 'Montante Líquido', 'Elegíveis Globais', 'Valor Base / Pessoa', 'Peso BPR / Média Mensal']],
         body: layerRows,
         theme: 'grid',
         headStyles: {
@@ -337,7 +337,53 @@ export class BprPdfService {
         margin: { left: 14, right: 14 }
       });
 
-      nextY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 4 : nextY + 25;
+      const docWithLast = doc as jsPDF & { lastAutoTable?: { finalY?: number } };
+      nextY = docWithLast.lastAutoTable?.finalY ? docWithLast.lastAutoTable.finalY + 4 : nextY + 25;
+
+      // Tabela 1B: Grupos de Montante Específico (Rateio Exclusivo)
+      if (summary.dedicatedGroupSummaries && summary.dedicatedGroupSummaries.length > 0) {
+        const fundingMap: Record<string, string> = {
+          total_pool: 'Abate do Bolo Geral',
+          extra_bonus: 'Acréscimo Extra (Não Abate)',
+          E: 'Abate da Camada E',
+          T: 'Abate da Camada T',
+          O: 'Abate da Camada O',
+        };
+        const modeMap: Record<string, string> = {
+          equal: 'Igualitário',
+          percentage: '% por Pessoa',
+          amount: 'Valor Fixo R$',
+        };
+
+        autoTable(doc, {
+          startY: nextY,
+          head: [['Grupo de Montante Específico (Exclusivo)', 'Critério / Observação', 'Origem do Recurso', 'Rateio', 'Membros', 'Montante Grupo', 'Total Alocado']],
+          body: summary.dedicatedGroupSummaries.map(gs => [
+            gs.name,
+            gs.criteriaDescription || '—',
+            fundingMap[gs.fundingSource] || gs.fundingSource,
+            modeMap[gs.distributionMode] || gs.distributionMode,
+            `${gs.memberCount} pessoa(s)`,
+            formatCurrency(gs.poolAmount),
+            formatCurrency(gs.allocatedTotal)
+          ]),
+          theme: 'grid',
+          headStyles: {
+            fillColor: [15, 118, 110],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 7.2,
+            halign: 'left'
+          },
+          bodyStyles: {
+            fontSize: 7.2,
+            textColor: [30, 41, 59]
+          },
+          margin: { left: 14, right: 14 }
+        });
+
+        nextY = docWithLast.lastAutoTable?.finalY ? docWithLast.lastAutoTable.finalY + 4 : nextY + 22;
+      }
     }
 
     // Tabela 2: Relação dos Colaboradores Selecionados
@@ -346,17 +392,23 @@ export class BprPdfService {
       const histCell = hasHist
         ? `Mont.: ${formatCurrency(c.periodReceivedTotal || 0)}\nMédia (${c.periodMonthsCount}m): ${formatCurrency(c.periodReceivedAverage || 0)}\nBPR: ${formatPctPtBr(c.bprVsAveragePct)} méd. · ${formatPctPtBr(c.bprVsTotalPct)} mont.`
         : 'Sem histórico';
+      const camadaCell = c.dedicatedGroupId
+        ? `Grupo: ${c.dedicatedGroupName} (${formatPctPtBr(c.dedicatedGroupSharePct)})`
+        : c.camadaLabel;
+      const fatorCell = c.dedicatedGroupId
+        ? 'Grupo Exclusivo'
+        : (c.performanceFactorLabel || '100%');
 
       return [
         c.corporateName || c.name,
         c.company,
         c.department,
         c.jobRole,
-        c.camadaLabel,
+        camadaCell,
         c.linkType,
         c.monthlyAverageScore !== undefined ? `${c.monthlyAverageScore}%` : '100%',
-        c.performanceFactorLabel || '100%',
-        c.isEligible ? 'Elegível' : 'Inelegível',
+        fatorCell,
+        c.isEligible ? (c.dedicatedGroupId ? 'Grupo Excl.' : 'Elegível') : 'Inelegível',
         c.isEligible ? formatCurrency(c.rateioAmount ?? c.allocatedAmount) : 'R$ 0,00',
         c.isEligible ? formatCurrency(c.additionalAmount || 0) : 'R$ 0,00',
         c.isEligible ? formatCurrency(c.allocatedAmount) : 'R$ 0,00',
@@ -780,7 +832,7 @@ export class BprPdfService {
                 <th>Camada / Perfil</th>
                 <th style="text-align: center;">% Rateio</th>
                 <th style="text-align: right;">Montante Bruto</th>
-                <th style="text-align: right;">(-) Adic. Abatido</th>
+                <th style="text-align: right;">(-) Abatimentos</th>
                 <th style="text-align: right;">Montante Líquido</th>
                 <th style="text-align: center;">Elegíveis Globais</th>
                 <th style="text-align: right;">Valor Base por Pessoa</th>
@@ -792,7 +844,7 @@ export class BprPdfService {
                 <td><strong>Estratégico (E)</strong></td>
                 <td style="text-align: center;">${summary.layers.E.allocatedPercentage}%</td>
                 <td class="amount-cell">${formatCurrency(summary.layers.E.grossLayerAmount ?? summary.layers.E.totalLayerAmount)}</td>
-                <td class="amount-cell" style="color: #b45309;">${formatCurrency(summary.layers.E.additionalDeductedFromLayer || 0)}</td>
+                <td class="amount-cell" style="color: #b45309;">${formatCurrency((summary.layers.E.dedicatedGroupsDeductedFromLayer || 0) + (summary.layers.E.additionalDeductedFromLayer || 0))}</td>
                 <td class="amount-cell">${formatCurrency(summary.layers.E.totalLayerAmount)}</td>
                 <td style="text-align: center;">${summary.layers.E.eligibleCount} colaborador(es)</td>
                 <td class="amount-cell" style="color: #1d4ed8;">${formatCurrency(summary.layers.E.amountPerEligible)}</td>
@@ -802,7 +854,7 @@ export class BprPdfService {
                 <td><strong>Tático (T)</strong></td>
                 <td style="text-align: center;">${summary.layers.T.allocatedPercentage}%</td>
                 <td class="amount-cell">${formatCurrency(summary.layers.T.grossLayerAmount ?? summary.layers.T.totalLayerAmount)}</td>
-                <td class="amount-cell" style="color: #b45309;">${formatCurrency(summary.layers.T.additionalDeductedFromLayer || 0)}</td>
+                <td class="amount-cell" style="color: #b45309;">${formatCurrency((summary.layers.T.dedicatedGroupsDeductedFromLayer || 0) + (summary.layers.T.additionalDeductedFromLayer || 0))}</td>
                 <td class="amount-cell">${formatCurrency(summary.layers.T.totalLayerAmount)}</td>
                 <td style="text-align: center;">${summary.layers.T.eligibleCount} colaborador(es)</td>
                 <td class="amount-cell" style="color: #4338ca;">${formatCurrency(summary.layers.T.amountPerEligible)}</td>
@@ -812,7 +864,7 @@ export class BprPdfService {
                 <td><strong>Operacional / CLTs (O)</strong></td>
                 <td style="text-align: center;">${summary.layers.O.allocatedPercentage}%</td>
                 <td class="amount-cell">${formatCurrency(summary.layers.O.grossLayerAmount ?? summary.layers.O.totalLayerAmount)}</td>
-                <td class="amount-cell" style="color: #b45309;">${formatCurrency(summary.layers.O.additionalDeductedFromLayer || 0)}</td>
+                <td class="amount-cell" style="color: #b45309;">${formatCurrency((summary.layers.O.dedicatedGroupsDeductedFromLayer || 0) + (summary.layers.O.additionalDeductedFromLayer || 0))}</td>
                 <td class="amount-cell">${formatCurrency(summary.layers.O.totalLayerAmount)}</td>
                 <td style="text-align: center;">${summary.layers.O.eligibleCount} colaborador(es)</td>
                 <td class="amount-cell" style="color: #047857;">${formatCurrency(summary.layers.O.amountPerEligible)}</td>
@@ -820,6 +872,47 @@ export class BprPdfService {
               </tr>
             </tbody>
           </table>
+          ${(summary.dedicatedGroupSummaries && summary.dedicatedGroupSummaries.length > 0) ? `
+            <div class="table-title" style="color: #0f766e;">Grupos de Montante Específico (Rateio Exclusivo fora das Camadas E/T/O)</div>
+            <table>
+              <thead>
+                <tr style="background: #0f766e; color: #ffffff;">
+                  <th>Grupo</th>
+                  <th>Critério / Observação</th>
+                  <th>Origem do Recurso</th>
+                  <th>Rateio</th>
+                  <th style="text-align: center;">Membros</th>
+                  <th style="text-align: right;">Montante Grupo</th>
+                  <th style="text-align: right;">Total Alocado</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${summary.dedicatedGroupSummaries.map(gs => {
+                  const fundingLabel = gs.fundingSource === 'total_pool'
+                    ? 'Abate do Bolo Geral'
+                    : gs.fundingSource === 'extra_bonus'
+                      ? 'Acréscimo Extra (Não Abate)'
+                      : `Abate da Camada ${gs.fundingSource}`;
+                  const modeLabel = gs.distributionMode === 'equal'
+                    ? 'Igualitário'
+                    : gs.distributionMode === 'percentage'
+                      ? '% por Pessoa'
+                      : 'Valor Fixo R$';
+                  return `
+                    <tr>
+                      <td><strong>${escapeHtml(gs.name)}</strong></td>
+                      <td>${escapeHtml(gs.criteriaDescription || '—')}</td>
+                      <td>${escapeHtml(fundingLabel)}</td>
+                      <td>${escapeHtml(modeLabel)}</td>
+                      <td style="text-align: center;">${gs.memberCount} pessoa(s)</td>
+                      <td class="amount-cell">${formatCurrency(gs.poolAmount)}</td>
+                      <td class="amount-cell" style="color: #0f766e;">${formatCurrency(gs.allocatedTotal)}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          ` : ''}
         ` : ''}
 
         <div class="table-title">Relação Analítica de Colaboradores e Valores Individuais</div>
@@ -830,7 +923,7 @@ export class BprPdfService {
               <th>Empresa</th>
               <th>Departamento</th>
               <th>Cargo / Escopo</th>
-              <th>Camada</th>
+              <th>Camada / Grupo</th>
               <th>Regime</th>
               <th style="text-align: center;">Metas</th>
               <th style="text-align: center;">Fator</th>
@@ -856,13 +949,13 @@ export class BprPdfService {
                 <td>${escapeHtml(c.company)}</td>
                 <td>${escapeHtml(c.department)}</td>
                 <td>${escapeHtml(c.jobRole)}</td>
-                <td>${escapeHtml(c.camadaLabel)}</td>
+                <td>${c.dedicatedGroupId ? `<strong style="color: #0f766e;">Grupo: ${escapeHtml(c.dedicatedGroupName || '')}</strong><div style="font-size: 8px; color: #64748b;">${formatPctPtBr(c.dedicatedGroupSharePct)} · Origem ${escapeHtml(c.camada)}</div>` : escapeHtml(c.camadaLabel)}</td>
                 <td>${escapeHtml(c.linkType)}</td>
                 <td style="text-align: center;">${c.monthlyAverageScore !== undefined ? `${c.monthlyAverageScore}%` : '100%'}</td>
-                <td style="text-align: center;">${escapeHtml(c.performanceFactorLabel || '100%')}</td>
+                <td style="text-align: center;">${c.dedicatedGroupId ? 'Grupo Exclusivo' : escapeHtml(c.performanceFactorLabel || '100%')}</td>
                 <td style="text-align: center;">
                   <span class="${c.isEligible ? 'badge-eligible' : 'badge-ineligible'}">
-                    ${c.isEligible ? 'Elegível' : 'Inelegível'}
+                    ${c.isEligible ? (c.dedicatedGroupId ? 'Grupo Excl.' : 'Elegível') : 'Inelegível'}
                   </span>
                 </td>
                 <td class="amount-cell" style="color: ${c.isEligible ? '#334155' : '#94a3b8'};">
