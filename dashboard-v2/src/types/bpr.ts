@@ -111,6 +111,17 @@ export interface BprCandidateResult {
   bprVsTotalPct?: number;         // % que o BPR final equivale em relação ao montante total recebido no período
 }
 
+export interface BprLayerRelativeWeight {
+  eligibleWithHistoryCount: number;
+  eligibleCount: number;
+  monthlyAverageBase: number;      // Soma das médias mensais recebidas dos elegíveis com histórico
+  periodTotalBase: number;         // Soma dos montantes recebidos no período dos elegíveis com histórico
+  bprAllocatedBase: number;        // Soma do BPR final desses mesmos elegíveis com histórico
+  bprVsMonthlyAvgPct: number;      // % que o BPR representa sobre a média mensal da camada (ex: 150.0)
+  bprMultipleOfMonthlyAvg: number; // Múltiplo de remuneração/honorários mensais (ex: 1.50)
+  bprVsPeriodTotalPct: number;     // % que o BPR representa sobre o montante total do período (ex: 25.0)
+}
+
 export interface BprLayerSummary {
   camada: BprCamada;
   label: string;
@@ -121,6 +132,11 @@ export interface BprLayerSummary {
   eligibleCount: number;
   ineligibleCount: number;
   amountPerEligible: number;
+  eligibleWithHistoryCount?: number;
+  monthlyAverageBase?: number;
+  bprVsMonthlyAvgPct?: number;
+  bprMultipleOfMonthlyAvg?: number;
+  bprVsPeriodTotalPct?: number;
 }
 
 export interface BprCalculationSummary {
@@ -128,6 +144,7 @@ export interface BprCalculationSummary {
   totalAdditionalAmount?: number;     // R$ soma de todos os valores adicionais dos elegíveis
   netPoolForLayers?: number;          // R$ saldo líquido efetivamente rateado entre as camadas E, T e O
   totalPeriodReceivedAmount?: number; // R$ soma dos montantes históricos recebidos pelos elegíveis no período
+  overallRelativeWeight?: BprLayerRelativeWeight; // Peso relativo consolidado do BPR sobre recebimentos médios
   totalDistributedAmount: number;
   residualAmount: number;
   totalCandidates: number;
@@ -152,6 +169,7 @@ export interface BprSavedScenario {
     totalAdditionalAmount?: number;
     netPoolForLayers?: number;
     totalPeriodReceivedAmount?: number;
+    overallRelativeWeight?: BprLayerRelativeWeight;
     totalDistributedAmount: number;
     residualAmount: number;
     totalCandidates: number;

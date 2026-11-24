@@ -958,4 +958,68 @@ assert.strictEqual(resHist.totalPeriodReceivedAmount, 35000);
 
 console.log('   ✅ Motivo/justificativa do adicional e comparativo histórico do período (Montante, Média, % Média e % Montante) validados com 100% de precisão!');
 
+// 19. Testando Peso Relativo do BPR por Camada (E, T, O e Geral) sobre Recebimentos Médios Mensais
+console.log('\n19. Testando Peso Relativo do BPR (% Média Mensal e Múltiplos) por Camada e Consolidado Geral...');
+const candidatesForWeights = [
+  // Camada E: 1 elegível com média mensal R$ 20.000 (montante 6m R$ 120.000), BPR R$ 40.000 -> 200.0% (2.00x), 33.3% mont.
+  { employeeId: 'w-e1', name: 'Dir 1', camada: 'E', isEligible: true, allocatedAmount: 40000, periodReceivedAverage: 20000, periodReceivedTotal: 120000 },
+  // Camada T: 2 elegíveis com histórico (A: média 12k, B: média 8k -> base 20k; BPR 15k + 15k = 30k) -> 150.0% (1.50x)
+  { employeeId: 'w-t1', name: 'Ger A', camada: 'T', isEligible: true, allocatedAmount: 15000, periodReceivedAverage: 12000, periodReceivedTotal: 72000 },
+  { employeeId: 'w-t2', name: 'Ger B', camada: 'T', isEligible: true, allocatedAmount: 15000, periodReceivedAverage: 8000, periodReceivedTotal: 48000 },
+  // Camada O: 2 elegíveis, mas apenas 1 com histórico (média 4k, BPR 6k) e 1 sem histórico (média 0, BPR 6k) -> deve excluir o sem histórico do numerador e denominador! -> 150.0% (1.50x)
+  { employeeId: 'w-o1', name: 'Op Com Hist', camada: 'O', isEligible: true, allocatedAmount: 6000, periodReceivedAverage: 4000, periodReceivedTotal: 24000 },
+  { employeeId: 'w-o2', name: 'Op Sem Hist', camada: 'O', isEligible: true, allocatedAmount: 6000, periodReceivedAverage: 0, periodReceivedTotal: 0 },
+  // Inelegível com histórico não entra na base
+  { employeeId: 'w-o3', name: 'Op Ineleg', camada: 'O', isEligible: false, allocatedAmount: 0, periodReceivedAverage: 5000, periodReceivedTotal: 30000 },
+];
+
+const weightsRes = RealBprService.computeLayerRelativeWeights(candidatesForWeights);
+assert.strictEqual(weightsRes.E.eligibleCount, 1);
+assert.strictEqual(weightsRes.E.eligibleWithHistoryCount, 1);
+assert.strictEqual(weightsRes.E.bprVsMonthlyAvgPct, 200);
+assert.strictEqual(weightsRes.E.bprMultipleOfMonthlyAvg, 2);
+assert.strictEqual(weightsRes.E.bprVsPeriodTotalPct, 33.3);
+
+assert.strictEqual(weightsRes.T.eligibleCount, 2);
+assert.strictEqual(weightsRes.T.eligibleWithHistoryCount, 2);
+assert.strictEqual(weightsRes.T.monthlyAverageBase, 20000);
+assert.strictEqual(weightsRes.T.bprAllocatedBase, 30000);
+assert.strictEqual(weightsRes.T.bprVsMonthlyAvgPct, 150);
+assert.strictEqual(weightsRes.T.bprMultipleOfMonthlyAvg, 1.5);
+
+// Proteção contra inflação do múltiplo quando há elegível sem histórico na camada O
+assert.strictEqual(weightsRes.O.eligibleCount, 2);
+assert.strictEqual(weightsRes.O.eligibleWithHistoryCount, 1);
+assert.strictEqual(weightsRes.O.monthlyAverageBase, 4000);
+assert.strictEqual(weightsRes.O.bprAllocatedBase, 6000);
+assert.strictEqual(weightsRes.O.bprVsMonthlyAvgPct, 150);
+assert.strictEqual(weightsRes.O.bprMultipleOfMonthlyAvg, 1.5);
+
+// Consolidado geral (apenas elegíveis com histórico: BPR 40k+30k+6k = 76k / Média 20k+20k+4k = 44k -> 172.7% / 1.73x)
+assert.strictEqual(weightsRes.overall.eligibleCount, 5);
+assert.strictEqual(weightsRes.overall.eligibleWithHistoryCount, 4);
+assert.strictEqual(weightsRes.overall.monthlyAverageBase, 44000);
+assert.strictEqual(weightsRes.overall.bprAllocatedBase, 76000);
+assert.strictEqual(weightsRes.overall.bprVsMonthlyAvgPct, 172.7);
+assert.strictEqual(weightsRes.overall.bprMultipleOfMonthlyAvg, 1.73);
+
+// Caso vazio / sem histórico: zero NaN
+const emptyWeights = RealBprService.computeLayerRelativeWeights([]);
+assert.strictEqual(emptyWeights.overall.bprVsMonthlyAvgPct, 0);
+assert.strictEqual(emptyWeights.overall.bprMultipleOfMonthlyAvg, 0);
+assert.strictEqual(emptyWeights.overall.eligibleWithHistoryCount, 0);
+
+// Validação integrada em calculateBpr (resHist do Bloco 18):
+// Ana CLT (O): BPR 12.500 / Média 5.000 = 250.0% (2.50x); Carlos PJ (T): BPR 20.000 / Média 10.000 = 200.0% (2.00x); Bruno (E): sem histórico -> 0
+// Geral: (12.500 + 20.000) / (5.000 + 10.000) = 32.500 / 15.000 = 216.7% (2.17x)
+assert.strictEqual(resHist.layers.O.bprVsMonthlyAvgPct, 250);
+assert.strictEqual(resHist.layers.O.bprMultipleOfMonthlyAvg, 2.5);
+assert.strictEqual(resHist.layers.T.bprVsMonthlyAvgPct, 200);
+assert.strictEqual(resHist.layers.T.bprMultipleOfMonthlyAvg, 2);
+assert.strictEqual(resHist.layers.E.eligibleWithHistoryCount, 0);
+assert.strictEqual(resHist.overallRelativeWeight.bprVsMonthlyAvgPct, 216.7);
+assert.strictEqual(resHist.overallRelativeWeight.bprMultipleOfMonthlyAvg, 2.17);
+
+console.log('   ✅ Peso Relativo do BPR (% Média Mensal e Múltiplos) por Camada (E/T/O) e Consolidado Geral validados sem distorção!');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

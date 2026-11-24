@@ -212,6 +212,9 @@ export function BprCockpitModal({
   const formatPctPtBr = (val?: number) =>
     `${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
+  const formatMultiplePtBr = (val?: number) =>
+    `${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x`;
+
   // Atualização de Ciclo
   const handleCycleChange = (cycle: BprCycle) => {
     const newConf = BprService.getDefaultConfig(cycle, config.year);
@@ -319,6 +322,7 @@ export function BprCockpitModal({
         totalAdditionalAmount: summary.totalAdditionalAmount,
         netPoolForLayers: summary.netPoolForLayers,
         totalPeriodReceivedAmount: summary.totalPeriodReceivedAmount,
+        overallRelativeWeight: summary.overallRelativeWeight,
         totalDistributedAmount: summary.totalDistributedAmount,
         residualAmount: summary.residualAmount,
         totalCandidates: summary.totalCandidates,
@@ -533,6 +537,35 @@ export function BprCockpitModal({
   const scenariosToCompare = useMemo(() => {
     return savedScenarios.filter(s => selectedScenarioIdsForCompare.includes(s.id));
   }, [savedScenarios, selectedScenarioIdsForCompare]);
+
+  // Peso Relativo por Camada (E, T, O e Geral) para cada Cenário Comparado (com hidratação para cenários antigos)
+  const scenarioWeightsMap = useMemo(() => {
+    const out = new Map<string, ReturnType<typeof BprService.computeLayerRelativeWeights>>();
+    scenariosToCompare.forEach(sc => {
+      const snap = sc.candidatesSnapshot || [];
+      const hasEmbeddedHistory = snap.some(c => (c.periodReceivedAverage || 0) > 0);
+      if (hasEmbeddedHistory || monthlyCosts.length === 0) {
+        out.set(sc.id, BprService.computeLayerRelativeWeights(snap));
+        return;
+      }
+      // Cenário salvo antes da v.02.60.25: hidrata histórico do período sem alterar os valores congelados do cenário
+      const histRef = BprService.calculateBpr(employees, monthlyCosts, sc.config);
+      const histById = new Map(histRef.candidates.map(c => [c.employeeId, c]));
+      const hydrated = snap.map(c => {
+        const ref = histById.get(c.employeeId);
+        return ref
+          ? {
+              ...c,
+              periodReceivedTotal: ref.periodReceivedTotal,
+              periodReceivedAverage: ref.periodReceivedAverage,
+              periodMonthsCount: ref.periodMonthsCount
+            }
+          : c;
+      });
+      out.set(sc.id, BprService.computeLayerRelativeWeights(hydrated));
+    });
+    return out;
+  }, [scenariosToCompare, employees, monthlyCosts]);
 
   // Linhas Analíticas do Comparador
   const comparisonRows = useMemo(() => {
@@ -1308,11 +1341,19 @@ export function BprCockpitModal({
                       {summary.layers.E.eligibleCount} elegíveis ({summary.layers.E.ineligibleCount} fora)
                     </div>
                   </div>
-                  <div className="pt-2 border-t border-blue-100">
+                  <div className="pt-2 border-t border-blue-100 space-y-1">
                     <span className="text-[11px] font-bold text-slate-500 uppercase block">Valor por Pessoa:</span>
-                    <span className="text-lg font-black text-blue-600 font-mono">
+                    <span className="text-lg font-black text-blue-600 font-mono block">
                       {summary.layers.E.eligibleCount > 0 ? formatCurrency(summary.layers.E.amountPerEligible) : '—'}
                     </span>
+                    {(summary.layers.E.eligibleWithHistoryCount || 0) > 0 && (
+                      <div
+                        className="text-[10px] font-black text-sky-800 bg-sky-50 border border-sky-200 rounded-md px-1.5 py-0.5 font-mono inline-block"
+                        title={`Base: ${summary.layers.E.eligibleWithHistoryCount} de ${summary.layers.E.eligibleCount} elegíveis com histórico no período (Média mensal acumulada: ${formatCurrency(summary.layers.E.monthlyAverageBase || 0)} · ${formatPctPtBr(summary.layers.E.bprVsPeriodTotalPct)} do montante do período)`}
+                      >
+                        {formatPctPtBr(summary.layers.E.bprVsMonthlyAvgPct)} méd. ({formatMultiplePtBr(summary.layers.E.bprMultipleOfMonthlyAvg)})
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1333,11 +1374,19 @@ export function BprCockpitModal({
                       {summary.layers.T.eligibleCount} elegíveis ({summary.layers.T.ineligibleCount} fora)
                     </div>
                   </div>
-                  <div className="pt-2 border-t border-indigo-100">
+                  <div className="pt-2 border-t border-indigo-100 space-y-1">
                     <span className="text-[11px] font-bold text-slate-500 uppercase block">Valor por Pessoa:</span>
-                    <span className="text-lg font-black text-indigo-600 font-mono">
+                    <span className="text-lg font-black text-indigo-600 font-mono block">
                       {summary.layers.T.eligibleCount > 0 ? formatCurrency(summary.layers.T.amountPerEligible) : '—'}
                     </span>
+                    {(summary.layers.T.eligibleWithHistoryCount || 0) > 0 && (
+                      <div
+                        className="text-[10px] font-black text-sky-800 bg-sky-50 border border-sky-200 rounded-md px-1.5 py-0.5 font-mono inline-block"
+                        title={`Base: ${summary.layers.T.eligibleWithHistoryCount} de ${summary.layers.T.eligibleCount} elegíveis com histórico no período (Média mensal acumulada: ${formatCurrency(summary.layers.T.monthlyAverageBase || 0)} · ${formatPctPtBr(summary.layers.T.bprVsPeriodTotalPct)} do montante do período)`}
+                      >
+                        {formatPctPtBr(summary.layers.T.bprVsMonthlyAvgPct)} méd. ({formatMultiplePtBr(summary.layers.T.bprMultipleOfMonthlyAvg)})
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1358,11 +1407,19 @@ export function BprCockpitModal({
                       {summary.layers.O.eligibleCount} elegíveis ({summary.layers.O.ineligibleCount} fora)
                     </div>
                   </div>
-                  <div className="pt-2 border-t border-emerald-100">
+                  <div className="pt-2 border-t border-emerald-100 space-y-1">
                     <span className="text-[11px] font-bold text-slate-500 uppercase block">Valor por Pessoa:</span>
-                    <span className="text-lg font-black text-emerald-600 font-mono">
+                    <span className="text-lg font-black text-emerald-600 font-mono block">
                       {summary.layers.O.eligibleCount > 0 ? formatCurrency(summary.layers.O.amountPerEligible) : '—'}
                     </span>
+                    {(summary.layers.O.eligibleWithHistoryCount || 0) > 0 && (
+                      <div
+                        className="text-[10px] font-black text-sky-800 bg-sky-50 border border-sky-200 rounded-md px-1.5 py-0.5 font-mono inline-block"
+                        title={`Base: ${summary.layers.O.eligibleWithHistoryCount} de ${summary.layers.O.eligibleCount} elegíveis com histórico no período (Média mensal acumulada: ${formatCurrency(summary.layers.O.monthlyAverageBase || 0)} · ${formatPctPtBr(summary.layers.O.bprVsPeriodTotalPct)} do montante do período)`}
+                      >
+                        {formatPctPtBr(summary.layers.O.bprVsMonthlyAvgPct)} méd. ({formatMultiplePtBr(summary.layers.O.bprMultipleOfMonthlyAvg)})
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1915,6 +1972,40 @@ export function BprCockpitModal({
                 <strong className="text-base font-black text-amber-600 font-mono">
                   {formatCurrency(summary.residualAmount)}
                 </strong>
+              </div>
+            )}
+
+            {(summary.overallRelativeWeight?.eligibleWithHistoryCount || 0) > 0 && (
+              <div className="border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 sm:pl-5">
+                <span className="text-[10px] font-black text-sky-700 uppercase block tracking-wider mb-1">
+                  Peso BPR (% Média Mensal por Camada):
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+                  <span
+                    className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-black"
+                    title={`Estratégico (E): ${summary.layers.E.eligibleWithHistoryCount || 0} de ${summary.layers.E.eligibleCount} elegíveis com histórico`}
+                  >
+                    E: {(summary.layers.E.eligibleWithHistoryCount || 0) > 0 ? `${formatPctPtBr(summary.layers.E.bprVsMonthlyAvgPct)} (${formatMultiplePtBr(summary.layers.E.bprMultipleOfMonthlyAvg)})` : '—'}
+                  </span>
+                  <span
+                    className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 border border-slate-300 font-black"
+                    title={`Tático (T): ${summary.layers.T.eligibleWithHistoryCount || 0} de ${summary.layers.T.eligibleCount} elegíveis com histórico`}
+                  >
+                    T: {(summary.layers.T.eligibleWithHistoryCount || 0) > 0 ? `${formatPctPtBr(summary.layers.T.bprVsMonthlyAvgPct)} (${formatMultiplePtBr(summary.layers.T.bprMultipleOfMonthlyAvg)})` : '—'}
+                  </span>
+                  <span
+                    className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-black"
+                    title={`Operacional/CLTs (O): ${summary.layers.O.eligibleWithHistoryCount || 0} de ${summary.layers.O.eligibleCount} elegíveis com histórico`}
+                  >
+                    O: {(summary.layers.O.eligibleWithHistoryCount || 0) > 0 ? `${formatPctPtBr(summary.layers.O.bprVsMonthlyAvgPct)} (${formatMultiplePtBr(summary.layers.O.bprMultipleOfMonthlyAvg)})` : '—'}
+                  </span>
+                  <span
+                    className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200 font-black"
+                    title={`Geral: ${summary.overallRelativeWeight?.eligibleWithHistoryCount || 0} de ${summary.totalEligible} elegíveis com histórico (${formatPctPtBr(summary.overallRelativeWeight?.bprVsPeriodTotalPct)} do montante do período)`}
+                  >
+                    Geral: {formatPctPtBr(summary.overallRelativeWeight?.bprVsMonthlyAvgPct)} ({formatMultiplePtBr(summary.overallRelativeWeight?.bprMultipleOfMonthlyAvg)})
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -2655,7 +2746,7 @@ export function BprCockpitModal({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => BprPdfService.exportComparisonPdf(scenariosToCompare, comparisonRows)}
+                  onClick={() => BprPdfService.exportComparisonPdf(scenariosToCompare, comparisonRows, Object.fromEntries(scenarioWeightsMap))}
                   className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
                   title="Baixar comparativo em PDF"
                 >
@@ -2664,7 +2755,7 @@ export function BprCockpitModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => BprPdfService.openPrintableComparison(scenariosToCompare, comparisonRows)}
+                  onClick={() => BprPdfService.openPrintableComparison(scenariosToCompare, comparisonRows, Object.fromEntries(scenarioWeightsMap))}
                   className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
                   title="Imprimir relatório comparativo"
                 >
@@ -2681,31 +2772,143 @@ export function BprCockpitModal({
               </div>
             </div>
 
-            {/* Cards de Resumo Lado a Lado dos Cenários Comparados */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 bg-white shrink-0 overflow-x-auto">
+            {/* Cards de Resumo Lado a Lado dos Cenários Comparados + Resumo Executivo por Camada */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-white shrink-0 space-y-4 overflow-x-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 min-w-[500px]">
-                {scenariosToCompare.map((sc, idx) => (
-                  <div key={sc.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider">Cenário #{idx + 1}</span>
-                      <span className="text-[11px] font-bold text-slate-500">
-                        {sc.studyDate ? sc.studyDate.split('-').reverse().join('/') : '-'}
-                      </span>
-                    </div>
-                    <h5 className="font-black text-sm text-slate-900 truncate" title={sc.name}>{sc.name}</h5>
-                    <div className="pt-1.5 border-t border-slate-200/70 grid grid-cols-2 gap-2 text-xs font-mono">
-                      <div>
-                        <span className="text-[9px] text-slate-400 uppercase block font-sans">Montante</span>
-                        <strong className="text-emerald-700">{formatCurrency(sc.summary.totalPoolAmount)}</strong>
+                {scenariosToCompare.map((sc, idx) => {
+                  const scWeights = scenarioWeightsMap.get(sc.id);
+                  const hasHist = (scWeights?.overall.eligibleWithHistoryCount || 0) > 0;
+                  return (
+                    <div key={sc.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider">Cenário #{idx + 1}</span>
+                        <span className="text-[11px] font-bold text-slate-500">
+                          {sc.studyDate ? sc.studyDate.split('-').reverse().join('/') : '-'}
+                        </span>
                       </div>
-                      <div>
-                        <span className="text-[9px] text-slate-400 uppercase block font-sans">Elegíveis</span>
-                        <strong className="text-slate-800">{sc.summary.totalEligible} pessoas</strong>
+                      <h5 className="font-black text-sm text-slate-900 truncate" title={sc.name}>{sc.name}</h5>
+                      <div className="pt-1.5 border-t border-slate-200/70 grid grid-cols-2 gap-2 text-xs font-mono">
+                        <div>
+                          <span className="text-[9px] text-slate-400 uppercase block font-sans">Montante</span>
+                          <strong className="text-emerald-700">{formatCurrency(sc.summary.totalPoolAmount)}</strong>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-400 uppercase block font-sans">Elegíveis</span>
+                          <strong className="text-slate-800">{sc.summary.totalEligible} pessoas</strong>
+                        </div>
                       </div>
+                      {hasHist && scWeights && (
+                        <div className="pt-1.5 border-t border-slate-200/70 space-y-1">
+                          <span className="text-[9px] font-black text-sky-700 uppercase block tracking-wider">
+                            Peso BPR (% Média Mensal):
+                          </span>
+                          <div className="grid grid-cols-4 gap-1 text-[10px] font-mono text-center">
+                            <div className="bg-blue-50 border border-blue-200 rounded px-1 py-0.5 text-blue-800 font-black">
+                              <span className="block text-[8px] font-sans text-blue-600">E</span>
+                              {scWeights.E.eligibleWithHistoryCount > 0 ? formatMultiplePtBr(scWeights.E.bprMultipleOfMonthlyAvg) : '—'}
+                            </div>
+                            <div className="bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-slate-800 font-black">
+                              <span className="block text-[8px] font-sans text-slate-500">T</span>
+                              {scWeights.T.eligibleWithHistoryCount > 0 ? formatMultiplePtBr(scWeights.T.bprMultipleOfMonthlyAvg) : '—'}
+                            </div>
+                            <div className="bg-emerald-50 border border-emerald-200 rounded px-1 py-0.5 text-emerald-800 font-black">
+                              <span className="block text-[8px] font-sans text-emerald-600">O</span>
+                              {scWeights.O.eligibleWithHistoryCount > 0 ? formatMultiplePtBr(scWeights.O.bprMultipleOfMonthlyAvg) : '—'}
+                            </div>
+                            <div className="bg-sky-50 border border-sky-200 rounded px-1 py-0.5 text-sky-900 font-black">
+                              <span className="block text-[8px] font-sans text-sky-600">Geral</span>
+                              {formatMultiplePtBr(scWeights.overall.bprMultipleOfMonthlyAvg)}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {/* Quadro Executivo Comparativo por Camada (E, T, O e Geral) */}
+              {scenariosToCompare.some(sc => (scenarioWeightsMap.get(sc.id)?.overall.eligibleWithHistoryCount || 0) > 0) && (
+                <div className="rounded-2xl border border-sky-200 bg-sky-50/40 overflow-hidden">
+                  <div className="px-3.5 py-2 bg-sky-100/70 border-b border-sky-200 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-sky-900">
+                      Resumo Executivo por Camada — Peso Relativo do BPR sobre Recebimentos Médios Mensais
+                    </span>
+                    <span className="text-[10px] font-bold text-sky-700">
+                      % da Média Mensal (Múltiplo de Salários / Honorários)
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="bg-white border-b border-sky-100 text-[10px] font-black uppercase text-slate-500">
+                          <th className="py-2 px-3">Camada / Nível</th>
+                          {scenariosToCompare.map((sc, idx) => (
+                            <th key={sc.id} className="py-2 px-3 text-right">
+                              #{idx + 1} · {sc.name.length > 22 ? `${sc.name.slice(0, 20)}...` : sc.name}
+                            </th>
+                          ))}
+                          {scenariosToCompare.length >= 2 && (
+                            <th className="py-2 px-3 text-right">Delta (#2 vs #1)</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-sky-100/80 bg-white">
+                        {([
+                          { key: 'E' as const, label: 'Estratégico (E)' },
+                          { key: 'T' as const, label: 'Tático (T)' },
+                          { key: 'O' as const, label: 'Operacional / CLTs (O)' },
+                          { key: 'overall' as const, label: 'Consolidado Geral' },
+                        ]).map(rowDef => {
+                          const w0 = scenarioWeightsMap.get(scenariosToCompare[0]?.id)?.[rowDef.key];
+                          const w1 = scenarioWeightsMap.get(scenariosToCompare[1]?.id)?.[rowDef.key];
+                          const deltaPp = scenariosToCompare.length >= 2 && w0 && w1 && w0.eligibleWithHistoryCount > 0 && w1.eligibleWithHistoryCount > 0
+                            ? Number((w1.bprVsMonthlyAvgPct - w0.bprVsMonthlyAvgPct).toFixed(1))
+                            : null;
+
+                          return (
+                            <tr key={rowDef.key} className={rowDef.key === 'overall' ? 'bg-sky-50/50 font-black' : ''}>
+                              <td className="py-2 px-3 font-bold text-slate-800">{rowDef.label}</td>
+                              {scenariosToCompare.map(sc => {
+                                const w = scenarioWeightsMap.get(sc.id)?.[rowDef.key];
+                                const valid = (w?.eligibleWithHistoryCount || 0) > 0;
+                                return (
+                                  <td key={sc.id} className="py-2 px-3 text-right font-mono">
+                                    {valid && w ? (
+                                      <span
+                                        className="font-bold text-slate-900"
+                                        title={`Base: ${w.eligibleWithHistoryCount} de ${w.eligibleCount} elegíveis com histórico · ${formatPctPtBr(w.bprVsPeriodTotalPct)} do montante do período`}
+                                      >
+                                        {formatPctPtBr(w.bprVsMonthlyAvgPct)}{' '}
+                                        <span className="text-sky-700 font-black">({formatMultiplePtBr(w.bprMultipleOfMonthlyAvg)})</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400">—</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                              {scenariosToCompare.length >= 2 && (
+                                <td className="py-2 px-3 text-right font-mono font-black">
+                                  {deltaPp === null ? (
+                                    <span className="text-slate-400">—</span>
+                                  ) : deltaPp > 0 ? (
+                                    <span className="text-emerald-700">+{deltaPp.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.</span>
+                                  ) : deltaPp < 0 ? (
+                                    <span className="text-rose-600">{deltaPp.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.</span>
+                                  ) : (
+                                    <span className="text-slate-400">0,0 p.p.</span>
+                                  )}
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Barra de Filtros da Tabela Comparativa */}

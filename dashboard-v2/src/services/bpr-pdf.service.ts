@@ -5,7 +5,8 @@ import {
   BprRuleConfig, 
   BprSavedScenario,
   BprCandidateResult,
-  BprCamada
+  BprCamada,
+  BprLayerRelativeWeight
 } from '@/types/bpr';
 
 const formatCurrency = (val: number) => 
@@ -13,6 +14,28 @@ const formatCurrency = (val: number) =>
 
 const formatPctPtBr = (val?: number) =>
   `${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+const formatMultiplePtBr = (val?: number) =>
+  `${(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x`;
+
+type ScenarioRelativeWeightsBundle = {
+  E: BprLayerRelativeWeight;
+  T: BprLayerRelativeWeight;
+  O: BprLayerRelativeWeight;
+  overall: BprLayerRelativeWeight;
+};
+
+const formatScenarioWeightLine = (
+  sc: BprSavedScenario,
+  bundle?: ScenarioRelativeWeightsBundle
+): string => {
+  const ePct = bundle ? (bundle.E.eligibleWithHistoryCount > 0 ? bundle.E.bprMultipleOfMonthlyAvg : 0) : ((sc.summary.layers?.E?.eligibleWithHistoryCount || 0) > 0 ? (sc.summary.layers?.E?.bprMultipleOfMonthlyAvg || 0) : 0);
+  const tPct = bundle ? (bundle.T.eligibleWithHistoryCount > 0 ? bundle.T.bprMultipleOfMonthlyAvg : 0) : ((sc.summary.layers?.T?.eligibleWithHistoryCount || 0) > 0 ? (sc.summary.layers?.T?.bprMultipleOfMonthlyAvg || 0) : 0);
+  const oPct = bundle ? (bundle.O.eligibleWithHistoryCount > 0 ? bundle.O.bprMultipleOfMonthlyAvg : 0) : ((sc.summary.layers?.O?.eligibleWithHistoryCount || 0) > 0 ? (sc.summary.layers?.O?.bprMultipleOfMonthlyAvg || 0) : 0);
+  const gPct = bundle ? (bundle.overall.eligibleWithHistoryCount > 0 ? bundle.overall.bprMultipleOfMonthlyAvg : 0) : ((sc.summary.overallRelativeWeight?.eligibleWithHistoryCount || 0) > 0 ? (sc.summary.overallRelativeWeight?.bprMultipleOfMonthlyAvg || 0) : 0);
+  if (ePct === 0 && tPct === 0 && oPct === 0 && gPct === 0) return '—';
+  return `E: ${ePct > 0 ? formatMultiplePtBr(ePct) : '—'} | T: ${tPct > 0 ? formatMultiplePtBr(tPct) : '—'} | O: ${oPct > 0 ? formatMultiplePtBr(oPct) : '—'} | Geral: ${gPct > 0 ? formatMultiplePtBr(gPct) : '—'}`;
+};
 
 const escapeHtml = (str?: string) =>
   String(str || '')
@@ -237,6 +260,11 @@ export class BprPdfService {
 
     // Tabela 1: Resumo das Camadas (Opcional)
     if (meta?.includeLayerSummary !== false) {
+      const fmtLayerWeight = (layer: typeof summary.layers.E) =>
+        (layer.eligibleWithHistoryCount || 0) > 0
+          ? `${formatPctPtBr(layer.bprVsMonthlyAvgPct)} (${formatMultiplePtBr(layer.bprMultipleOfMonthlyAvg)})`
+          : '—';
+
       const layerRows = [
         [
           'Estratégico (E)',
@@ -245,7 +273,8 @@ export class BprPdfService {
           formatCurrency(summary.layers.E.additionalDeductedFromLayer || 0),
           formatCurrency(summary.layers.E.totalLayerAmount),
           `${summary.layers.E.eligibleCount} colaborador(es)`,
-          formatCurrency(summary.layers.E.amountPerEligible)
+          formatCurrency(summary.layers.E.amountPerEligible),
+          fmtLayerWeight(summary.layers.E)
         ],
         [
           'Tático (T)',
@@ -254,7 +283,8 @@ export class BprPdfService {
           formatCurrency(summary.layers.T.additionalDeductedFromLayer || 0),
           formatCurrency(summary.layers.T.totalLayerAmount),
           `${summary.layers.T.eligibleCount} colaborador(es)`,
-          formatCurrency(summary.layers.T.amountPerEligible)
+          formatCurrency(summary.layers.T.amountPerEligible),
+          fmtLayerWeight(summary.layers.T)
         ],
         [
           'Operacional / CLTs (O)',
@@ -263,13 +293,14 @@ export class BprPdfService {
           formatCurrency(summary.layers.O.additionalDeductedFromLayer || 0),
           formatCurrency(summary.layers.O.totalLayerAmount),
           `${summary.layers.O.eligibleCount} colaborador(es)`,
-          formatCurrency(summary.layers.O.amountPerEligible)
+          formatCurrency(summary.layers.O.amountPerEligible),
+          fmtLayerWeight(summary.layers.O)
         ]
       ];
 
       autoTable(doc, {
         startY: nextY,
-        head: [['Camada / Perfil', 'Rateio (%)', 'Montante Bruto', '(-) Adic. Abatido', 'Montante Líquido', 'Elegíveis Globais', 'Valor Base / Pessoa']],
+        head: [['Camada / Perfil', 'Rateio (%)', 'Montante Bruto', '(-) Adic. Abatido', 'Montante Líquido', 'Elegíveis Globais', 'Valor Base / Pessoa', 'Peso BPR / Média Mensal']],
         body: layerRows,
         theme: 'grid',
         headStyles: {
@@ -733,6 +764,7 @@ export class BprPdfService {
                 <th style="text-align: right;">Montante Líquido</th>
                 <th style="text-align: center;">Elegíveis Globais</th>
                 <th style="text-align: right;">Valor Base por Pessoa</th>
+                <th style="text-align: right;">Peso BPR / Média Mensal</th>
               </tr>
             </thead>
             <tbody>
@@ -744,6 +776,7 @@ export class BprPdfService {
                 <td class="amount-cell">${formatCurrency(summary.layers.E.totalLayerAmount)}</td>
                 <td style="text-align: center;">${summary.layers.E.eligibleCount} colaborador(es)</td>
                 <td class="amount-cell" style="color: #1d4ed8;">${formatCurrency(summary.layers.E.amountPerEligible)}</td>
+                <td class="amount-cell" style="color: #0369a1;">${(summary.layers.E.eligibleWithHistoryCount || 0) > 0 ? `${formatPctPtBr(summary.layers.E.bprVsMonthlyAvgPct)} (${formatMultiplePtBr(summary.layers.E.bprMultipleOfMonthlyAvg)})` : '—'}</td>
               </tr>
               <tr>
                 <td><strong>Tático (T)</strong></td>
@@ -753,6 +786,7 @@ export class BprPdfService {
                 <td class="amount-cell">${formatCurrency(summary.layers.T.totalLayerAmount)}</td>
                 <td style="text-align: center;">${summary.layers.T.eligibleCount} colaborador(es)</td>
                 <td class="amount-cell" style="color: #4338ca;">${formatCurrency(summary.layers.T.amountPerEligible)}</td>
+                <td class="amount-cell" style="color: #0369a1;">${(summary.layers.T.eligibleWithHistoryCount || 0) > 0 ? `${formatPctPtBr(summary.layers.T.bprVsMonthlyAvgPct)} (${formatMultiplePtBr(summary.layers.T.bprMultipleOfMonthlyAvg)})` : '—'}</td>
               </tr>
               <tr>
                 <td><strong>Operacional / CLTs (O)</strong></td>
@@ -762,6 +796,7 @@ export class BprPdfService {
                 <td class="amount-cell">${formatCurrency(summary.layers.O.totalLayerAmount)}</td>
                 <td style="text-align: center;">${summary.layers.O.eligibleCount} colaborador(es)</td>
                 <td class="amount-cell" style="color: #047857;">${formatCurrency(summary.layers.O.amountPerEligible)}</td>
+                <td class="amount-cell" style="color: #0369a1;">${(summary.layers.O.eligibleWithHistoryCount || 0) > 0 ? `${formatPctPtBr(summary.layers.O.bprVsMonthlyAvgPct)} (${formatMultiplePtBr(summary.layers.O.bprMultipleOfMonthlyAvg)})` : '—'}</td>
               </tr>
             </tbody>
           </table>
@@ -955,7 +990,8 @@ export class BprPdfService {
    */
   static exportComparisonPdf(
     scenarios: BprSavedScenario[],
-    rows: ScenarioComparisonItem[]
+    rows: ScenarioComparisonItem[],
+    weightsByScenarioId?: Record<string, ScenarioRelativeWeightsBundle>
   ): void {
     const doc = new jsPDF({
       orientation: 'landscape',
@@ -982,21 +1018,22 @@ export class BprPdfService {
       formatCurrency(s.summary.totalPoolAmount),
       formatCurrency(s.summary.totalDistributedAmount),
       `${s.summary.totalEligible} pessoas`,
-      `E: ${formatCurrency(s.summary.amountPerE)} | T: ${formatCurrency(s.summary.amountPerT)} | O: ${formatCurrency(s.summary.amountPerO)}`
+      `E: ${formatCurrency(s.summary.amountPerE)} | T: ${formatCurrency(s.summary.amountPerT)} | O: ${formatCurrency(s.summary.amountPerO)}`,
+      formatScenarioWeightLine(s, weightsByScenarioId?.[s.id])
     ]);
 
     autoTable(doc, {
       startY: 25,
-      head: [['Cenário / Estudo', 'Data Estudo', 'Ciclo', 'Montante Previsto', 'Total Rateado', 'Elegíveis', 'Valor Base Médio (E / T / O)']],
+      head: [['Cenário / Estudo', 'Data Estudo', 'Ciclo', 'Montante Previsto', 'Total Rateado', 'Elegíveis', 'Valor Base Médio (E / T / O)', 'Peso BPR / Média Mensal (E / T / O / Geral)']],
       body: scSummaryRows,
       theme: 'grid',
       headStyles: {
         fillColor: [15, 23, 42],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 8
+        fontSize: 7.5
       },
-      bodyStyles: { fontSize: 7.5 }
+      bodyStyles: { fontSize: 7 }
     });
 
     const finalY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 6 : 60;
@@ -1102,7 +1139,8 @@ export class BprPdfService {
    */
   static openPrintableComparison(
     scenarios: BprSavedScenario[],
-    rows: ScenarioComparisonItem[]
+    rows: ScenarioComparisonItem[],
+    weightsByScenarioId?: Record<string, ScenarioRelativeWeightsBundle>
   ): void {
     if (typeof window === 'undefined') return;
 
@@ -1153,17 +1191,19 @@ export class BprPdfService {
               <th style="text-align: right;">Montante Total</th>
               <th style="text-align: right;">Total Rateado</th>
               <th style="text-align: center;">Elegíveis</th>
+              <th style="text-align: right;">Peso BPR / Média Mensal (E / T / O / Geral)</th>
             </tr>
           </thead>
           <tbody>
             ${scenarios.map(s => `
               <tr>
-                <td><strong>${s.name}</strong></td>
+                <td><strong>${escapeHtml(s.name)}</strong></td>
                 <td>${formatDatePtBr(s.studyDate)}</td>
-                <td>${s.config.cycle} / ${s.config.year}</td>
+                <td>${escapeHtml(s.config.cycle)} / ${s.config.year}</td>
                 <td class="amount">${formatCurrency(s.summary.totalPoolAmount)}</td>
                 <td class="amount" style="color: #047857;">${formatCurrency(s.summary.totalDistributedAmount)}</td>
                 <td style="text-align: center;">${s.summary.totalEligible}</td>
+                <td class="amount" style="color: #0369a1; font-size: 9px;">${escapeHtml(formatScenarioWeightLine(s, weightsByScenarioId?.[s.id]))}</td>
               </tr>
             `).join('')}
           </tbody>

@@ -5,6 +5,7 @@ import {
   BprCalculationSummary,
   BprCamada,
   BprLayerSummary,
+  BprLayerRelativeWeight,
   BprCycle,
   BprSavedScenario,
   BprSavedRun
@@ -655,6 +656,16 @@ export class BprService {
       };
     });
 
+    // Peso Relativo do BPR sobre a Folha/Recebimentos Médios de cada Camada (E, T, O e Geral)
+    const relativeWeights = this.computeLayerRelativeWeights(updatedCandidates);
+    (['E', 'T', 'O'] as BprCamada[]).forEach(k => {
+      layers[k].eligibleWithHistoryCount = relativeWeights[k].eligibleWithHistoryCount;
+      layers[k].monthlyAverageBase = relativeWeights[k].monthlyAverageBase;
+      layers[k].bprVsMonthlyAvgPct = relativeWeights[k].bprVsMonthlyAvgPct;
+      layers[k].bprMultipleOfMonthlyAvg = relativeWeights[k].bprMultipleOfMonthlyAvg;
+      layers[k].bprVsPeriodTotalPct = relativeWeights[k].bprVsPeriodTotalPct;
+    });
+
     const netPoolForLayers = Number((net.E + net.T + net.O).toFixed(2));
     const totalDistributedRounded = Number(totalDistributed.toFixed(2));
     const totalPeriodReceivedRounded = Number(totalPeriodReceivedAmount.toFixed(2));
@@ -665,6 +676,7 @@ export class BprService {
       totalAdditionalAmount,
       netPoolForLayers,
       totalPeriodReceivedAmount: totalPeriodReceivedRounded,
+      overallRelativeWeight: relativeWeights.overall,
       totalDistributedAmount: totalDistributedRounded,
       residualAmount,
       totalCandidates: updatedCandidates.length,
@@ -674,6 +686,73 @@ export class BprService {
       candidates: updatedCandidates,
       glosadosCandidates: glosadosCandidatesArg || updatedCandidates.filter(c => c.hasGlosaInPeriod),
       inativosCandidates: inativosCandidatesArg || updatedCandidates.filter(c => c.isInactiveAtPaymentDate)
+    };
+  }
+
+  /**
+   * Calcula de forma pura e auditável o peso relativo do BPR sobre os recebimentos médios mensais
+   * e montante do período para cada camada (E, T, O) e no consolidado geral.
+   * Considera no numerador e denominador estritamente os elegíveis com histórico > 0 (evita distorção de múltiplos).
+   */
+  static computeLayerRelativeWeights(
+    candidates: BprCandidateResult[]
+  ): {
+    E: BprLayerRelativeWeight;
+    T: BprLayerRelativeWeight;
+    O: BprLayerRelativeWeight;
+    overall: BprLayerRelativeWeight;
+  } {
+    const buildWeight = (list: BprCandidateResult[]): BprLayerRelativeWeight => {
+      let eligibleCount = 0;
+      let eligibleWithHistoryCount = 0;
+      let monthlyAverageBase = 0;
+      let periodTotalBase = 0;
+      let bprAllocatedBase = 0;
+
+      list.forEach(c => {
+        if (!c.isEligible) return;
+        eligibleCount += 1;
+        const avg = Number(c.periodReceivedAverage || 0);
+        const tot = Number(c.periodReceivedTotal || 0);
+        if (avg > 0) {
+          eligibleWithHistoryCount += 1;
+          monthlyAverageBase += avg;
+          periodTotalBase += tot;
+          bprAllocatedBase += Number(c.allocatedAmount || 0);
+        }
+      });
+
+      const monthlyAvgRounded = Number(monthlyAverageBase.toFixed(2));
+      const periodTotalRounded = Number(periodTotalBase.toFixed(2));
+      const bprAllocatedRounded = Number(bprAllocatedBase.toFixed(2));
+
+      const bprVsMonthlyAvgPct = monthlyAvgRounded > 0
+        ? Number(((bprAllocatedRounded / monthlyAvgRounded) * 100).toFixed(1))
+        : 0;
+      const bprMultipleOfMonthlyAvg = monthlyAvgRounded > 0
+        ? Number((bprAllocatedRounded / monthlyAvgRounded).toFixed(2))
+        : 0;
+      const bprVsPeriodTotalPct = periodTotalRounded > 0
+        ? Number(((bprAllocatedRounded / periodTotalRounded) * 100).toFixed(1))
+        : 0;
+
+      return {
+        eligibleWithHistoryCount,
+        eligibleCount,
+        monthlyAverageBase: monthlyAvgRounded,
+        periodTotalBase: periodTotalRounded,
+        bprAllocatedBase: bprAllocatedRounded,
+        bprVsMonthlyAvgPct,
+        bprMultipleOfMonthlyAvg,
+        bprVsPeriodTotalPct
+      };
+    };
+
+    return {
+      E: buildWeight(candidates.filter(c => c.camada === 'E')),
+      T: buildWeight(candidates.filter(c => c.camada === 'T')),
+      O: buildWeight(candidates.filter(c => c.camada === 'O')),
+      overall: buildWeight(candidates)
     };
   }
 
@@ -729,6 +808,7 @@ export class BprService {
         totalAdditionalAmount: recalculated.totalAdditionalAmount,
         netPoolForLayers: recalculated.netPoolForLayers,
         totalPeriodReceivedAmount: recalculated.totalPeriodReceivedAmount,
+        overallRelativeWeight: recalculated.overallRelativeWeight,
         totalDistributedAmount: recalculated.totalDistributedAmount,
         residualAmount: recalculated.residualAmount,
         totalCandidates: recalculated.totalCandidates,
