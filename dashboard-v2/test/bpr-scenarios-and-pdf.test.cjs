@@ -1431,6 +1431,37 @@ assert.strictEqual(aliceComp.scenarioValues['sc-1'].dedicatedGroupName, undefine
 assert.strictEqual(aliceComp.scenarioValues['sc-2'].dedicatedGroupName, 'Projeto Alpha');
 assert.strictEqual(aliceComp.delta, -18000);
 
+// 22E. Comparador considera somente colaboradores considerados (elegíveis / valor > 0) em pelo menos um cenário
+const scWithInel1 = {
+  ...scSemGrupo,
+  id: 'sc-elig-1',
+  candidatesSnapshot: [
+    ...scSemGrupo.candidatesSnapshot,
+    { employeeId: 'p-inel-both', name: 'Carlos Inelegível', company: 'MarBR', department: 'Op', jobRole: 'Op', camada: 'O', camadaLabel: 'Operacional/CLTs', isEligible: false, allocatedAmount: 0 },
+    { employeeId: 'p-exc-2', name: 'Diana Exceção', company: 'MarBR', department: 'Op', jobRole: 'Op', camada: 'O', camadaLabel: 'Operacional/CLTs', isEligible: false, allocatedAmount: 0 },
+  ],
+};
+const scWithInel2 = {
+  ...scComGrupo,
+  id: 'sc-elig-2',
+  candidatesSnapshot: [
+    ...scComGrupo.candidatesSnapshot,
+    { employeeId: 'p-inel-both', name: 'Carlos Inelegível', company: 'MarBR', department: 'Op', jobRole: 'Op', camada: 'O', camadaLabel: 'Operacional/CLTs', isEligible: false, allocatedAmount: 0 },
+    { employeeId: 'p-exc-2', name: 'Diana Exceção', company: 'MarBR', department: 'Op', jobRole: 'Op', camada: 'O', camadaLabel: 'Operacional/CLTs', isEligible: true, allocatedAmount: 5000 },
+  ],
+};
+const filteredCompRows = RealBprPdfService.buildComparisonRows([scWithInel1, scWithInel2]);
+assert.strictEqual(filteredCompRows.some(r => r.employeeId === 'p-inel-both'), false); // inelegível nos 2 -> omitido!
+const dianaComp = filteredCompRows.find(r => r.employeeId === 'p-exc-2');
+assert.ok(dianaComp); // elegível no cenário #2 -> incluída com delta exato!
+assert.strictEqual(dianaComp.delta, 5000);
+assert.strictEqual(filteredCompRows.length, 3); // Alice, Bruno, Diana
+// Opção explícita includeIneligible: true preserva comportamento completo quando solicitado
+assert.strictEqual(
+  RealBprPdfService.buildComparisonRows([scWithInel1, scWithInel2], { includeIneligible: true }).length,
+  4
+);
+
 console.log('   ✅ BprPdfService real (comparativo dedicado de grupos, fallback snapshot e filtro por grupo no PDF) validado com 100% de precisão!');
 
 // 23. Testando Seleção Direta de Colaboradores p/ Grupo com Regras do BPR, Fator % Editável, Redistribuição e Impacto Antes x Depois

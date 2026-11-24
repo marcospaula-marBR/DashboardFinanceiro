@@ -1120,9 +1120,13 @@ export class BprPdfService {
   }
 
   /**
-   * Constrói lista comparativa entre cenários para tabela analítica
+   * Constrói lista comparativa entre cenários para tabela analítica.
+   * Por padrão considera estritamente colaboradores elegíveis (ou com valor > 0) em pelo menos um dos cenários comparados.
    */
-  static buildComparisonRows(scenarios: BprSavedScenario[]): ScenarioComparisonItem[] {
+  static buildComparisonRows(
+    scenarios: BprSavedScenario[],
+    options?: { includeIneligible?: boolean }
+  ): ScenarioComparisonItem[] {
     const map = new Map<string, ScenarioComparisonItem>();
 
     scenarios.forEach(sc => {
@@ -1149,7 +1153,15 @@ export class BprPdfService {
       });
     });
 
-    const rows = Array.from(map.values());
+    const allRows = Array.from(map.values());
+    const rows = options?.includeIneligible
+      ? allRows
+      : allRows.filter(r =>
+          scenarios.some(sc => {
+            const val = r.scenarioValues[sc.id];
+            return Boolean(val && (val.isEligible || val.amount > 0));
+          })
+        );
 
     // Se houver pelo menos 2 cenários, calcula o delta entre o 2º e o 1º
     if (scenarios.length >= 2) {

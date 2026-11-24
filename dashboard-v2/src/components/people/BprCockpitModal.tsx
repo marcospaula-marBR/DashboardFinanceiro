@@ -3699,7 +3699,7 @@ export function BprCockpitModal({
                     Comparativo Executivo de Cenários BPR
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Tabela comparativa direta de valores calculados para cada colaborador entre os estudos selecionados
+                    Comparativo direto exibindo apenas colaboradores considerados (elegíveis ou com valor) nos estudos selecionados
                   </p>
                 </div>
               </div>
@@ -4008,7 +4008,7 @@ export function BprCockpitModal({
               )}
 
               <span className="text-xs font-bold text-slate-500">
-                {comparisonRows.length} colaboradores listados
+                {comparisonRows.length} colaborador(es) considerados nos cenários
               </span>
             </div>
 
