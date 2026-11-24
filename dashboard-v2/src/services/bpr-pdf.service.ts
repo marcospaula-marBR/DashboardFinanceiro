@@ -45,6 +45,10 @@ const formatCandidateFactorCell = (c: BprCandidateResult): string => {
   if (!c.dedicatedGroupId) return c.performanceFactorLabel || '100%';
   if (!c.isEligible) return 'Inelegível (BPR)';
   const pct = c.dedicatedGroupEffectiveFactorPct ?? 100;
+  if (pct < 100) {
+    const score = c.dedicatedGroupScorePct ?? pct;
+    return `Grupo (${score}% → ${pct}%)`;
+  }
   return (c.dedicatedGroupRedistributedBonus || 0) > 0
     ? `Grupo (${pct}% + redist.)`
     : `Grupo (${pct}%)`;

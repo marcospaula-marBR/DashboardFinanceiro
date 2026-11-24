@@ -175,6 +175,7 @@ export interface BprCandidateResult {
   dedicatedGroupId?: string;
   dedicatedGroupName?: string;
   dedicatedGroupSharePct?: number;
+  dedicatedGroupScorePct?: number;
   dedicatedGroupEffectiveFactorPct?: number;
   dedicatedGroupRedistributedBonus?: number;
 }

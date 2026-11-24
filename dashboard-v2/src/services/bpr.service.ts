@@ -26,6 +26,34 @@ const BPR_SCENARIOS_STORAGE_KEY = 'marbrasil_bpr_scenarios_v2';
 export class BprService {
 
   /**
+   * Mapeia o fator/meta informada (0 a 100%) para a faixa oficial de direito no Grupo Dedicado:
+   * - >= 100% -> 100% de direito ('full')
+   * - 90% a 99,99% -> reducedFactorPct (padrão 75%) de direito ('partial')
+   * - < 90% -> 0% de direito ('zero')
+   */
+  static resolveDedicatedFactorRightPct(
+    scorePct: number,
+    reducedFactorPct = 75
+  ): { tier: 'full' | 'partial' | 'zero'; rightPct: number } {
+    const rawScore = Number(scorePct);
+    const clampedScore = Number.isFinite(rawScore)
+      ? Math.round(Math.min(100, Math.max(0, rawScore)) * 100) / 100
+      : 0;
+    const rawReduced = Number(reducedFactorPct);
+    const clampedReduced = Number.isFinite(rawReduced)
+      ? Math.round(Math.min(100, Math.max(0, rawReduced)) * 100) / 100
+      : 75;
+
+    if (clampedScore >= 100) {
+      return { tier: 'full', rightPct: 100 };
+    }
+    if (clampedScore >= 90) {
+      return { tier: 'partial', rightPct: clampedReduced };
+    }
+    return { tier: 'zero', rightPct: 0 };
+  }
+
+  /**
    * Retorna a configuração padrão para um determinado ciclo e ano de referência
    */
   static getDefaultConfig(cycle: BprCycle = 'ciclo_1', year: number = new Date().getFullYear()): BprRuleConfig {
@@ -496,6 +524,7 @@ export class BprService {
         baseShare: number;
         shareAmount: number;
         sharePct: number;
+        scorePct: number;
         effectiveFactorPct: number;
         redistributedBonus: number;
       }
@@ -540,7 +569,7 @@ export class BprService {
         const mode = group.distributionMode || 'equal';
         let effectiveGroupPool = Math.max(0, round2(Number(group.poolAmount || 0)));
 
-        // Calcular cota base bruta por membro elegível do grupo
+        // Calcular cota base bruta por membro elegível do grupo e resolver faixa oficial de fator
         const prepared = eligibleMembers.map(m => {
           const cand = candidateById.get(m.employeeId)!;
           let rawBase = 0;
@@ -553,22 +582,34 @@ export class BprService {
             rawBase = Math.max(0, round2(Number(m.amount || 0)));
           }
 
-          // Fator efetivo (%): campo manual customFactorPct tem prioridade; senão usa regra de desempenho se habilitada
+          // Fator/Meta (%) base: customFactorPct tem prioridade; senão usa média/fator do ciclo se habilitado
           const hasCustomFactor =
             m.customFactorPct !== undefined &&
             m.customFactorPct !== null &&
+            String(m.customFactorPct).trim() !== '' &&
             !Number.isNaN(Number(m.customFactorPct));
-          let factorPct = 100;
+          let scorePct = 100;
           if (hasCustomFactor) {
-            factorPct = Math.min(100, Math.max(0, Number(m.customFactorPct)));
+            scorePct = Math.min(100, Math.max(0, Number(m.customFactorPct)));
           } else if (applyPerf) {
-            const perf = cand.performanceFactor ?? 1.0;
-            if (perf >= 1.0) factorPct = 100;
-            else if (perf > 0) factorPct = reducedFactorPct;
-            else factorPct = 0;
+            if (
+              cand.monthlyAverageScore !== undefined &&
+              cand.monthlyAverageScore !== null &&
+              !Number.isNaN(Number(cand.monthlyAverageScore))
+            ) {
+              scorePct = Math.min(100, Math.max(0, Number(cand.monthlyAverageScore)));
+            } else {
+              const perf = cand.performanceFactor ?? 1.0;
+              if (perf >= 1.0) scorePct = 100;
+              else if (perf > 0) scorePct = 95;
+              else scorePct = 0;
+            }
           }
 
-          return { member: m, rawBase, factorPct: round2(factorPct) };
+          scorePct = round2(scorePct);
+          const { tier, rightPct } = BprService.resolveDedicatedFactorRightPct(scorePct, reducedFactorPct);
+
+          return { member: m, rawBase, scorePct, tier, factorPct: rightPct };
         });
 
         if (mode === 'amount') {
@@ -576,42 +617,73 @@ export class BprService {
           effectiveGroupPool = Math.max(effectiveGroupPool, sumRawAmounts);
         }
 
-        // Aplicar fator e apurar saldo retido para eventual redistribuição entre os demais membros elegíveis
-        let retainedPool = 0;
-        const afterFactorItems = prepared.map(item => {
-          const afterFactor = round2(item.rawBase * (item.factorPct / 100));
-          const ret = Math.max(0, round2(item.rawBase - afterFactor));
-          retainedPool = round2(retainedPool + ret);
-          return { ...item, afterFactor, redistBonus: 0 };
+        // Etapa 1: membros < 90% ('zero') perdem direito; saldo é redistribuído entre elegíveis >= 90% ('partial' e 'full')
+        const ge90Items = prepared.filter(it => it.tier !== 'zero' && it.rawBase > 0);
+        const zeroItems = prepared.filter(it => it.tier === 'zero');
+        const retainedStep1 = round2(zeroItems.reduce((acc, it) => acc + it.rawBase, 0));
+        const sumGe90Base = round2(ge90Items.reduce((acc, it) => acc + it.rawBase, 0));
+
+        const step1Items = prepared.map(item => {
+          let baseAfterStep1 = item.rawBase;
+          let redistStep1 = 0;
+
+          if (shouldRedistribute) {
+            if (item.tier === 'zero') {
+              baseAfterStep1 = 0;
+            } else if (zeroItems.length > 0 && item.rawBase > 0) {
+              if (mode === 'equal' && ge90Items.length > 0) {
+                baseAfterStep1 = round2(effectiveGroupPool / ge90Items.length);
+                redistStep1 = Math.max(0, round2(baseAfterStep1 - item.rawBase));
+              } else if (retainedStep1 > 0.005 && sumGe90Base > 0) {
+                redistStep1 = round2(retainedStep1 * (item.rawBase / sumGe90Base));
+                baseAfterStep1 = round2(item.rawBase + redistStep1);
+              }
+            }
+          } else if (item.tier === 'zero') {
+            baseAfterStep1 = item.rawBase;
+          }
+
+          return { ...item, baseAfterStep1, redistStep1 };
         });
 
-        let redistributedAmount = 0;
-        if (shouldRedistribute && retainedPool > 0.005) {
-          const primaryItems = afterFactorItems.filter(it => it.factorPct >= 100 && it.rawBase > 0);
-          const sumPrimaryBase = round2(primaryItems.reduce((acc, it) => acc + it.rawBase, 0));
+        // Etapa 2: membros 90%-99% ('partial') recebem rightPct% (ex.: 75%) da cota pós-Etapa 1;
+        // a diferença retida (ex.: 25%) é redistribuída EXCLUSIVAMENTE entre os membros com 100% ('full').
+        let retainedStep2 = 0;
+        const afterFactorItems = step1Items.map(item => {
+          const afterFactor = round2(item.baseAfterStep1 * (item.factorPct / 100));
+          if (item.tier === 'partial') {
+            const ret = Math.max(0, round2(item.baseAfterStep1 - afterFactor));
+            retainedStep2 = round2(retainedStep2 + ret);
+          }
+          return { ...item, afterFactor, redistStep2: 0 };
+        });
 
-          if (sumPrimaryBase > 0) {
-            primaryItems.forEach(it => {
-              it.redistBonus = round2(retainedPool * (it.rawBase / sumPrimaryBase));
-              redistributedAmount = round2(redistributedAmount + it.redistBonus);
+        if (shouldRedistribute && retainedStep2 > 0.005) {
+          const fullItems = afterFactorItems.filter(it => it.tier === 'full' && it.baseAfterStep1 > 0);
+          const sumFullBase = round2(fullItems.reduce((acc, it) => acc + it.baseAfterStep1, 0));
+          if (sumFullBase > 0) {
+            fullItems.forEach(it => {
+              it.redistStep2 = round2(retainedStep2 * (it.baseAfterStep1 / sumFullBase));
             });
-          } else {
-            // Fallback secundário quando todos têm fator < 100% mas > 0%: redistribui proporcionalmente ao afterFactor
-            const fallbackItems = afterFactorItems.filter(it => it.afterFactor > 0);
-            const sumAfterFactor = round2(fallbackItems.reduce((acc, it) => acc + it.afterFactor, 0));
-            if (sumAfterFactor > 0) {
-              fallbackItems.forEach(it => {
-                it.redistBonus = round2(retainedPool * (it.afterFactor / sumAfterFactor));
-                redistributedAmount = round2(redistributedAmount + it.redistBonus);
-              });
-            }
           }
         }
 
+        let redistributedAmount = 0;
         let groupAllocated = 0;
         afterFactorItems.forEach(item => {
-          const finalShare = round2(item.afterFactor + item.redistBonus);
+          const finalShare = round2(item.afterFactor + item.redistStep2);
           groupAllocated = round2(groupAllocated + finalShare);
+
+          let redistBonus = 0;
+          if (shouldRedistribute) {
+            if (item.tier === 'full') {
+              redistBonus = round2(item.redistStep1 + item.redistStep2);
+            } else if (item.tier === 'partial') {
+              const directRight = round2(item.rawBase * (item.factorPct / 100));
+              redistBonus = Math.max(0, round2(finalShare - directRight));
+            }
+          }
+          redistributedAmount = round2(redistributedAmount + redistBonus);
 
           const nominalPct =
             mode === 'equal'
@@ -621,7 +693,7 @@ export class BprService {
                 : (effectiveGroupPool > 0 ? round2((item.rawBase / effectiveGroupPool) * 100) : 0);
 
           const sharePct =
-            (item.redistBonus > 0 || item.factorPct < 100) && effectiveGroupPool > 0
+            (redistBonus > 0 || item.factorPct < 100) && effectiveGroupPool > 0
               ? round2((finalShare / effectiveGroupPool) * 100)
               : nominalPct;
 
@@ -632,8 +704,9 @@ export class BprService {
             baseShare: item.rawBase,
             shareAmount: finalShare,
             sharePct,
+            scorePct: item.scorePct,
             effectiveFactorPct: item.factorPct,
-            redistributedBonus: item.redistBonus,
+            redistributedBonus: redistBonus,
           });
         });
 
@@ -645,6 +718,7 @@ export class BprService {
             baseShare: 0,
             shareAmount: 0,
             sharePct: 0,
+            scorePct: 0,
             effectiveFactorPct: 0,
             redistributedBonus: 0,
           });
@@ -919,6 +993,7 @@ export class BprService {
             dedicatedGroupId: dedicated.groupId,
             dedicatedGroupName: dedicated.groupName,
             dedicatedGroupSharePct: 0,
+            dedicatedGroupScorePct: 0,
             dedicatedGroupEffectiveFactorPct: 0,
             dedicatedGroupRedistributedBonus: 0,
             baseAmount: 0,
@@ -952,6 +1027,7 @@ export class BprService {
           dedicatedGroupId: dedicated.groupId,
           dedicatedGroupName: dedicated.groupName,
           dedicatedGroupSharePct: dedicated.sharePct,
+          dedicatedGroupScorePct: dedicated.scorePct,
           dedicatedGroupEffectiveFactorPct: dedicated.effectiveFactorPct,
           dedicatedGroupRedistributedBonus: dedicated.redistributedBonus,
           baseAmount: baseVal,
@@ -983,6 +1059,7 @@ export class BprService {
           dedicatedGroupId: undefined,
           dedicatedGroupName: undefined,
           dedicatedGroupSharePct: undefined,
+          dedicatedGroupScorePct: undefined,
           dedicatedGroupEffectiveFactorPct: undefined,
           dedicatedGroupRedistributedBonus: undefined,
           baseAmount: baseVal,
@@ -1003,6 +1080,7 @@ export class BprService {
         dedicatedGroupId: undefined,
         dedicatedGroupName: undefined,
         dedicatedGroupSharePct: undefined,
+        dedicatedGroupScorePct: undefined,
         dedicatedGroupEffectiveFactorPct: undefined,
         dedicatedGroupRedistributedBonus: undefined,
         baseAmount: 0,

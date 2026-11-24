@@ -2681,8 +2681,12 @@ export function BprCockpitModal({
                                   Montante Específico ({formatPctPtBr(c.dedicatedGroupSharePct)})
                                 </span>
                                 {(c.dedicatedGroupEffectiveFactorPct ?? 100) < 100 && (
-                                  <span className="text-[10px] text-amber-700 block font-mono font-bold">
-                                    Fator {c.dedicatedGroupEffectiveFactorPct}% · Base {formatCurrency(c.baseAmount)}
+                                  <span
+                                    className={`text-[10px] block font-mono font-bold ${
+                                      (c.dedicatedGroupEffectiveFactorPct ?? 0) === 0 ? 'text-rose-700' : 'text-amber-700'
+                                    }`}
+                                  >
+                                    Fator {c.dedicatedGroupScorePct ?? c.dedicatedGroupEffectiveFactorPct}% → {c.dedicatedGroupEffectiveFactorPct}% dir. · Base {formatCurrency(c.baseAmount)}
                                   </span>
                                 )}
                                 {(c.dedicatedGroupRedistributedBonus || 0) > 0 && (
@@ -5217,9 +5221,12 @@ export function BprCockpitModal({
                               }
                               className="w-4 h-4 rounded text-teal-600 border-slate-300 cursor-pointer"
                             />
-                            <span>Redistribuir saldo retido pelo fator entre os demais membros elegíveis</span>
+                            <span>Redistribuir em cascata (&lt;90% → ≥90%; diferença 90%-99% → 100%)</span>
                           </label>
                         </div>
+                        <p className="text-[11px] font-medium text-slate-600 bg-white/80 border border-slate-200 rounded-lg px-2.5 py-1.5 leading-snug">
+                          <strong className="font-bold text-slate-800">Regra de faixas:</strong> 100% = 100% bônus · 90%–99% = {effectiveReducedFactor}% bônus (diferença redistribuída aos 100%) · &lt; 90% = 0% (redistribuído aos ≥ 90%).
+                        </p>
                       </div>
 
                       {/* Quadro Executivo: Impacto Antes x Depois */}
@@ -5383,20 +5390,40 @@ export function BprCockpitModal({
                                     ? Number(m.percentage || 0)
                                     : (totalMemberAmt > 0 ? Number(((fallbackRawShare / totalMemberAmt) * 100).toFixed(1)) : 0);
 
+                              const defaultScoreNum = !effectiveApplyPerf
+                                ? 100
+                                : cand?.monthlyAverageScore !== undefined &&
+                                    cand?.monthlyAverageScore !== null &&
+                                    !Number.isNaN(Number(cand.monthlyAverageScore))
+                                  ? Math.min(100, Math.max(0, Number(cand.monthlyAverageScore)))
+                                  : (cand?.performanceFactor ?? 1.0) >= 1.0
+                                    ? 100
+                                    : (cand?.performanceFactor ?? 1.0) > 0
+                                      ? 95
+                                      : 0;
+                              const defaultCycleFactorPlaceholder = String(Math.round(defaultScoreNum * 100) / 100);
+                              const hasCustomScore =
+                                m.customFactorPct !== undefined &&
+                                m.customFactorPct !== null &&
+                                !Number.isNaN(Number(m.customFactorPct));
+                              const scoreForBadge = hasCustomScore
+                                ? Math.min(100, Math.max(0, Number(m.customFactorPct)))
+                                : defaultScoreNum;
+                              const resolvedTierInfo = isIneligibleInGroup
+                                ? { tier: 'zero' as const, rightPct: 0 }
+                                : BprService.resolveDedicatedFactorRightPct(
+                                    isActiveCalculated && cand?.dedicatedGroupScorePct !== undefined && !hasCustomScore
+                                      ? cand.dedicatedGroupScorePct
+                                      : scoreForBadge,
+                                    effectiveReducedFactor
+                                  );
+
                               const liveShare = isActiveCalculated
                                 ? (cand?.isEligible ? (cand.rateioAmount ?? cand.allocatedAmount ?? 0) : 0)
-                                : (isIneligibleInGroup ? 0 : fallbackRawShare);
+                                : (isIneligibleInGroup ? 0 : Number((fallbackRawShare * (resolvedTierInfo.rightPct / 100)).toFixed(2)));
                               const livePct = isActiveCalculated
                                 ? (cand?.dedicatedGroupSharePct || 0)
                                 : (isIneligibleInGroup ? 0 : fallbackPct);
-
-                              const defaultCycleFactorPlaceholder = !effectiveApplyPerf
-                                ? '100'
-                                : (cand?.performanceFactor ?? 1.0) >= 1.0
-                                  ? '100'
-                                  : (cand?.performanceFactor ?? 1.0) > 0
-                                    ? String(effectiveReducedFactor)
-                                    : '0';
 
                               return (
                                 <div
@@ -5481,14 +5508,17 @@ export function BprCockpitModal({
                                       </div>
                                     )}
 
-                                    {/* Campo editável de Fator % do colaborador dentro do grupo */}
-                                    <div className="flex items-center gap-1" title="Fator de desempenho (%) aplicado à cota deste colaborador (deixe vazio para usar o padrão do ciclo)">
-                                      <span className="text-[10px] font-bold text-slate-500 uppercase">Fator:</span>
+                                    {/* Campo editável de Meta / Fator % do colaborador dentro do grupo (regra 100% / 75% / 0%) */}
+                                    <div
+                                      className="flex items-center gap-1 flex-wrap"
+                                      title="Fator/Meta (%) informada: 100% = 100% de direito; 90%-99% = fator reduzido (padrão 75%); <90% = 0% (sem direito)"
+                                    >
+                                      <span className="text-[10px] font-bold text-slate-500 uppercase">Meta/Fator:</span>
                                       <input
                                         type="number"
                                         min="0"
                                         max="100"
-                                        step="5"
+                                        step="1"
                                         disabled={isIneligibleInGroup}
                                         aria-label={`Fator percentual para ${labelName}`}
                                         value={m.customFactorPct !== undefined ? m.customFactorPct : ''}
@@ -5499,18 +5529,37 @@ export function BprCockpitModal({
                                         className={`w-16 min-h-[38px] rounded-lg border px-1.5 py-1 text-right font-mono font-black text-xs outline-none ${
                                           isIneligibleInGroup
                                             ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
-                                            : m.customFactorPct !== undefined
-                                              ? 'bg-amber-50 border-amber-300 text-amber-900 focus:border-amber-500'
-                                              : 'bg-slate-50 border-slate-200 text-slate-700 focus:bg-white focus:border-teal-500'
+                                            : resolvedTierInfo.tier === 'zero'
+                                              ? 'bg-rose-50 border-rose-300 text-rose-900 focus:border-rose-500'
+                                              : resolvedTierInfo.tier === 'partial'
+                                                ? 'bg-amber-50 border-amber-300 text-amber-900 focus:border-amber-500'
+                                                : 'bg-slate-50 border-slate-200 text-slate-700 focus:bg-white focus:border-teal-500'
                                         }`}
                                       />
                                       <span className="text-[11px] font-black text-slate-500">%</span>
+                                      {!isIneligibleInGroup && (
+                                        <span
+                                          className={`text-[10px] font-black px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                                            resolvedTierInfo.tier === 'full'
+                                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                              : resolvedTierInfo.tier === 'partial'
+                                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                                          }`}
+                                        >
+                                          {resolvedTierInfo.tier === 'zero'
+                                            ? '→ 0% (sem dir.)'
+                                            : `→ ${resolvedTierInfo.rightPct}% dir.`}
+                                        </span>
+                                      )}
                                     </div>
 
                                     <div className="text-right font-mono min-w-[92px]">
-                                      <strong className={`text-xs font-black block ${
-                                        isIneligibleInGroup ? 'text-rose-500' : 'text-emerald-700'
-                                      }`}>
+                                      <strong
+                                        className={`text-xs font-black block ${
+                                          isIneligibleInGroup || liveShare === 0 ? 'text-rose-500' : 'text-emerald-700'
+                                        }`}
+                                      >
                                         {formatCurrency(liveShare)}
                                       </strong>
                                       <span className="text-[10px] font-bold text-slate-400 block">

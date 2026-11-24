@@ -1561,49 +1561,135 @@ assert.strictEqual(res23B.dedicatedGroupSummaries[0].redistributedAmount, 250);
 assert.strictEqual(res23B.dedicatedGroupSummaries[0].allocatedTotal, 5000);
 assert.strictEqual(res23B.residualAmount, 0);
 
-// 23C. Campo editável de Fator % individual (customFactorPct) + reducedFactorPct customizado + todos < 100%
-const candidates23C = buildTechScenarioCandidates({ 'tec-2': { performanceFactor: 0.75 } });
-const cfg23C = {
+// 23C. Faixas oficiais de fator (100% -> 100%; 90%-99% -> 75%/custom; <90% -> 0%) e cascata em 2 etapas
+const checkFactorTier = (scorePct, expectedTier, expectedRightPct, reducedPct) => {
+  const res = RealBprService.resolveDedicatedFactorRightPct(scorePct, reducedPct);
+  assert.strictEqual(res.tier, expectedTier);
+  assert.strictEqual(res.rightPct, expectedRightPct);
+};
+checkFactorTier(100, 'full', 100);
+checkFactorTier(99, 'partial', 75);
+checkFactorTier(90, 'partial', 75);
+checkFactorTier(89.9, 'zero', 0);
+checkFactorTier(75, 'zero', 0);
+checkFactorTier(0, 'zero', 0);
+checkFactorTier(95, 'partial', 80, 80);
+
+// Caso combinado: 6 colaboradores sobre R$ 6.000,00 (1 x 85%, 1 x 95%, 4 x 100%)
+// Etapa 1: 85% (<90%) perde direito -> 6.000 / 5 = 1.200 base aos >=90%
+// Etapa 2: 95% faz juz a 75% (900) e diferença de 300 redistribui aos 4 com 100% (+75 cada -> 1.275)
+const baseTec = candidates23A.find(c => c.employeeId === 'tec-1');
+const candidates23C_six = [
+  ...candidates23A.filter(c => c.employeeId !== 'sim-5' && c.employeeId !== 'sim-6'),
+  { ...baseTec, employeeId: 'sim-5', name: 'Técnico 5', corporateName: 'Técnico 5', performanceFactor: 1.0 },
+  { ...baseTec, employeeId: 'sim-6', name: 'Técnico 6', corporateName: 'Técnico 6', performanceFactor: 1.0 },
+];
+const cfg23C_cascade = {
   ...cfg23A,
   dedicatedGroups: [
     {
       ...cfg23A.dedicatedGroups[0],
-      reducedFactorPct: 80, // custom 80% para meta 90-99%
+      poolAmount: 6000,
+      reducedFactorPct: 75,
+      redistributePerformanceResidual: true,
       members: [
-        { employeeId: 'tec-1', customFactorPct: 50 }, // manual 50% -> 625 (retém 625)
-        { employeeId: 'tec-2' },                      // ciclo 80% -> 1000 (retém 250)
-        { employeeId: 'tec-3' },                      // 100% -> 1250 + 437.50 = 1687.50
-        { employeeId: 'tec-4' },                      // 100% -> 1250 + 437.50 = 1687.50
+        { employeeId: 'tec-1', customFactorPct: 85 },
+        { employeeId: 'tec-2', customFactorPct: 95 },
+        { employeeId: 'tec-3', customFactorPct: 100 },
+        { employeeId: 'tec-4', customFactorPct: 100 },
+        { employeeId: 'sim-5', customFactorPct: 100 },
+        { employeeId: 'sim-6', customFactorPct: 100 },
       ],
     },
   ],
 };
-const res23C = RealBprService.recalculateSnapshotWithNewConfig(candidates23C, cfg23C);
-assert.strictEqual(res23C.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 625);
-assert.strictEqual(res23C.candidates.find(c => c.employeeId === 'tec-2').allocatedAmount, 1000);
-assert.strictEqual(res23C.candidates.find(c => c.employeeId === 'tec-3').allocatedAmount, 1687.5);
-assert.strictEqual(res23C.candidates.find(c => c.employeeId === 'tec-4').allocatedAmount, 1687.5);
-assert.strictEqual(res23C.dedicatedGroupSummaries[0].allocatedTotal, 5000);
+const res23C_cascade = RealBprService.recalculateSnapshotWithNewConfig(candidates23C_six, cfg23C_cascade);
+const m85 = res23C_cascade.candidates.find(c => c.employeeId === 'tec-1');
+const m95 = res23C_cascade.candidates.find(c => c.employeeId === 'tec-2');
+const m100_a = res23C_cascade.candidates.find(c => c.employeeId === 'tec-3');
+const m100_b = res23C_cascade.candidates.find(c => c.employeeId === 'sim-6');
+assert.strictEqual(m85.allocatedAmount, 0);
+assert.strictEqual(m85.dedicatedGroupScorePct, 85);
+assert.strictEqual(m85.dedicatedGroupEffectiveFactorPct, 0);
+assert.strictEqual(m95.allocatedAmount, 900);
+assert.strictEqual(m95.dedicatedGroupScorePct, 95);
+assert.strictEqual(m95.dedicatedGroupEffectiveFactorPct, 75);
+assert.strictEqual(m95.dedicatedGroupRedistributedBonus, 150);
+assert.strictEqual(m100_a.allocatedAmount, 1275);
+assert.strictEqual(m100_a.dedicatedGroupRedistributedBonus, 275);
+assert.strictEqual(m100_b.allocatedAmount, 1275);
+assert.strictEqual(res23C_cascade.dedicatedGroupSummaries[0].allocatedTotal, 6000);
+assert.strictEqual(res23C_cascade.dedicatedGroupSummaries[0].residualAmount, 0);
 
-// Todos < 100%: fallback redistribui proporcionalmente entre os que têm afterFactor > 0
-const cfg23C_allReduced = {
+// Caso < 90% + 100%: 1 x 75% (sem direito) + 5 x 100% sobre R$ 6.000 -> 0 e 5 x 1.200
+const cfg23C_below90 = {
+  ...cfg23C_cascade,
+  dedicatedGroups: [
+    {
+      ...cfg23C_cascade.dedicatedGroups[0],
+      members: [
+        { employeeId: 'tec-1', customFactorPct: 75 },
+        { employeeId: 'tec-2', customFactorPct: 100 },
+        { employeeId: 'tec-3', customFactorPct: 100 },
+        { employeeId: 'tec-4', customFactorPct: 100 },
+        { employeeId: 'sim-5', customFactorPct: 100 },
+        { employeeId: 'sim-6', customFactorPct: 100 },
+      ],
+    },
+  ],
+};
+const res23C_below90 = RealBprService.recalculateSnapshotWithNewConfig(candidates23C_six, cfg23C_below90);
+assert.strictEqual(res23C_below90.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 0);
+assert.strictEqual(res23C_below90.candidates.find(c => c.employeeId === 'tec-2').allocatedAmount, 1200);
+assert.strictEqual(res23C_below90.candidates.find(c => c.employeeId === 'sim-6').allocatedAmount, 1200);
+assert.strictEqual(res23C_below90.dedicatedGroupSummaries[0].allocatedTotal, 6000);
+assert.strictEqual(res23C_below90.dedicatedGroupSummaries[0].residualAmount, 0);
+
+// Todos entre 90% e 99% sem ninguém com 100%: cada um recebe estritamente 75% e 25% fica de saldo residual
+const cfg23C_allPartial = {
   ...cfg23A,
   dedicatedGroups: [
     {
       ...cfg23A.dedicatedGroups[0],
+      poolAmount: 4000,
+      reducedFactorPct: 75,
+      redistributePerformanceResidual: true,
+      members: [
+        { employeeId: 'tec-1', customFactorPct: 95 },
+        { employeeId: 'tec-2', customFactorPct: 92 },
+        { employeeId: 'tec-3', customFactorPct: 99 },
+        { employeeId: 'tec-4', customFactorPct: 90 },
+      ],
+    },
+  ],
+};
+const res23C_allPartial = RealBprService.recalculateSnapshotWithNewConfig(candidates23A, cfg23C_allPartial);
+assert.strictEqual(res23C_allPartial.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 750);
+assert.strictEqual(res23C_allPartial.candidates.find(c => c.employeeId === 'tec-4').allocatedAmount, 750);
+assert.strictEqual(res23C_allPartial.dedicatedGroupSummaries[0].allocatedTotal, 3000);
+assert.strictEqual(res23C_allPartial.dedicatedGroupSummaries[0].residualAmount, 1000);
+assert.strictEqual(res23C_allPartial.dedicatedGroupSummaries[0].redistributedAmount, 0);
+
+// Todos < 90%: todos recebem R$ 0,00 e 100% permanece residual sem NaN
+const cfg23C_allZero = {
+  ...cfg23C_allPartial,
+  dedicatedGroups: [
+    {
+      ...cfg23C_allPartial.dedicatedGroups[0],
       members: [
         { employeeId: 'tec-1', customFactorPct: 80 },
-        { employeeId: 'tec-2', customFactorPct: 80 },
-        { employeeId: 'tec-3', customFactorPct: 40 },
-        { employeeId: 'tec-4', customFactorPct: 40 },
+        { employeeId: 'tec-2', customFactorPct: 75 },
+        { employeeId: 'tec-3', customFactorPct: 50 },
+        { employeeId: 'tec-4', customFactorPct: 0 },
       ],
     },
   ],
 };
-const res23C_allRed = RealBprService.recalculateSnapshotWithNewConfig(candidates23A, cfg23C_allReduced);
-assert.strictEqual(res23C_allRed.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 1666.67);
-assert.strictEqual(res23C_allRed.candidates.find(c => c.employeeId === 'tec-3').allocatedAmount, 833.33);
-assert.strictEqual(res23C_allRed.dedicatedGroupSummaries[0].allocatedTotal, 5000);
+const res23C_allZero = RealBprService.recalculateSnapshotWithNewConfig(candidates23A, cfg23C_allZero);
+assert.strictEqual(res23C_allZero.candidates.find(c => c.employeeId === 'tec-1').allocatedAmount, 0);
+assert.strictEqual(Number.isNaN(res23C_allZero.dedicatedGroupSummaries[0].allocatedTotal), false);
+assert.strictEqual(res23C_allZero.dedicatedGroupSummaries[0].allocatedTotal, 0);
+assert.strictEqual(res23C_allZero.dedicatedGroupSummaries[0].residualAmount, 4000);
 
 // 23D. Elegibilidade follow_bpr_rules: 1 membro inelegível no grupo recebe R$ 0 e não entra no divisor
 const candidates23D = buildTechScenarioCandidates({
