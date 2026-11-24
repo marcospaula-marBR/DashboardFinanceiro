@@ -70,6 +70,8 @@ export interface BprPdfMeta {
   eligibilityFilter?: 'all' | 'eligible_only' | 'ineligible_only';
   selectedCamadas?: BprCamada[];
   selectedCompanies?: string[];
+  selectedDedicatedGroupIds?: string[]; // vazio = todos; '__ALL_DEDICATED__' | '__STANDARD_LAYERS__' | IDs de grupos
+  selectedDedicatedGroupLabels?: string[];
   nameQuery?: string;
   includeSummaryCards?: boolean;
   includeLayerSummary?: boolean;
@@ -84,8 +86,22 @@ export interface ScenarioComparisonItem {
   department: string;
   jobRole: string;
   camadaLabel: string;
-  scenarioValues: Record<string, { amount: number; isEligible: boolean }>;
+  scenarioValues: Record<string, { amount: number; isEligible: boolean; dedicatedGroupName?: string }>;
   delta?: number;
+}
+
+export interface DedicatedGroupComparisonRow {
+  groupKey: string;
+  groupName: string;
+  scenarioValues: Record<string, {
+    allocatedTotal: number;
+    poolAmount: number;
+    memberCount: number;
+    distributionMode?: string;
+    fundingSource?: string;
+  }>;
+  deltaAmount?: number;
+  deltaMembers?: number;
 }
 
 export class BprPdfService {
@@ -98,6 +114,7 @@ export class BprPdfService {
     const eligibilityFilter = meta?.eligibilityFilter || 'eligible_only';
     const selectedCamadas = meta?.selectedCamadas || ['E', 'T', 'O'];
     const selectedCompanies = (meta?.selectedCompanies || []).map(c => c.trim().toLowerCase());
+    const selectedDedicatedGroupIds = meta?.selectedDedicatedGroupIds || [];
     const nameTokens = String(meta?.nameQuery || '')
       .split(',')
       .map(t => normalizeSearchText(t))
@@ -111,15 +128,29 @@ export class BprPdfService {
       // 2. Filtro de Camadas / Perfis
       if (selectedCamadas.length > 0 && !selectedCamadas.includes(c.camada)) return false;
 
-      // 3. Filtro de Empresas
+      // 3. Filtro de Grupos de Montante Específico (opcional)
+      if (selectedDedicatedGroupIds.length > 0) {
+        const allowAllDedicated = selectedDedicatedGroupIds.includes('__ALL_DEDICATED__');
+        const allowStandardLayers = selectedDedicatedGroupIds.includes('__STANDARD_LAYERS__');
+        const matchesSpecificGroup = Boolean(
+          c.dedicatedGroupId && selectedDedicatedGroupIds.includes(c.dedicatedGroupId)
+        );
+        const matchesGroupFilter =
+          (allowAllDedicated && Boolean(c.dedicatedGroupId)) ||
+          (allowStandardLayers && !c.dedicatedGroupId) ||
+          matchesSpecificGroup;
+        if (!matchesGroupFilter) return false;
+      }
+
+      // 4. Filtro de Empresas
       if (selectedCompanies.length > 0) {
         const comp = (c.company || '').trim().toLowerCase();
         if (!selectedCompanies.includes(comp)) return false;
       }
 
-      // 4. Filtro por Nome (sem acentos; suporta múltiplos nomes separados por vírgula)
+      // 5. Filtro por Nome (sem acentos; suporta múltiplos nomes separados por vírgula)
       if (nameTokens.length > 0) {
-        const haystack = normalizeSearchText(`${c.name} ${c.corporateName || ''} ${c.responsibleName || ''}`);
+        const haystack = normalizeSearchText(`${c.name} ${c.corporateName || ''} ${c.responsibleName || ''} ${c.dedicatedGroupName || ''}`);
         const matchesAny = nameTokens.some(token => haystack.includes(token));
         if (!matchesAny) return false;
       }
@@ -210,6 +241,11 @@ export class BprPdfService {
         : 'Apenas Colaboradores Elegíveis';
     const camadasLabel = (meta?.selectedCamadas || ['E', 'T', 'O']).map(c => c === 'E' ? 'Estratégico' : c === 'T' ? 'Tático' : 'Operacional').join(', ');
     const compsLabel = (meta?.selectedCompanies && meta.selectedCompanies.length > 0) ? meta.selectedCompanies.join(', ') : 'Todas';
+    const groupsFilterLabel = (meta?.selectedDedicatedGroupLabels && meta.selectedDedicatedGroupLabels.length > 0)
+      ? `  •  Grupos: ${meta.selectedDedicatedGroupLabels.join(', ')}`
+      : (meta?.selectedDedicatedGroupIds && meta.selectedDedicatedGroupIds.length > 0)
+        ? `  •  Grupos: ${meta.selectedDedicatedGroupIds.map(id => id === '__ALL_DEDICATED__' ? 'Somente Grupos Específicos' : id === '__STANDARD_LAYERS__' ? 'Somente Camadas E/T/O' : id).join(', ')}`
+        : '';
     const nameLabel = meta?.nameQuery?.trim() ? `  •  Nome: "${meta.nameQuery.trim()}"` : '';
 
     doc.setFont('helvetica', 'bold');
@@ -217,7 +253,8 @@ export class BprPdfService {
     doc.text(`RECORTE DESTE RELATÓRIO:`, 18, 44);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(30, 41, 59);
-    doc.text(`${eligLabel}  •  Camadas: ${camadasLabel}  •  Empresas: ${compsLabel}${nameLabel}  •  Total no Recorte: ${filteredCandidates.length}`, 65, 44);
+    const recorteLine = `${eligLabel}  •  Camadas: ${camadasLabel}  •  Empresas: ${compsLabel}${groupsFilterLabel}${nameLabel}  •  Total no Recorte: ${filteredCandidates.length}`;
+    doc.text(recorteLine.length > 135 ? `${recorteLine.slice(0, 132)}...` : recorteLine, 65, 44);
 
     let nextY = 50;
 
@@ -340,8 +377,13 @@ export class BprPdfService {
       const docWithLast = doc as jsPDF & { lastAutoTable?: { finalY?: number } };
       nextY = docWithLast.lastAutoTable?.finalY ? docWithLast.lastAutoTable.finalY + 4 : nextY + 25;
 
-      // Tabela 1B: Grupos de Montante Específico (Rateio Exclusivo)
-      if (summary.dedicatedGroupSummaries && summary.dedicatedGroupSummaries.length > 0) {
+      // Tabela 1B: Grupos de Montante Específico (Rateio Exclusivo — filtrada pelo recorte se aplicável)
+      const visibleDedicatedSummaries = (summary.dedicatedGroupSummaries || []).filter(gs => {
+        const ids = meta?.selectedDedicatedGroupIds || [];
+        if (ids.length === 0 || ids.includes('__ALL_DEDICATED__')) return true;
+        return ids.includes(gs.groupId);
+      });
+      if (visibleDedicatedSummaries.length > 0) {
         const fundingMap: Record<string, string> = {
           total_pool: 'Abate do Bolo Geral',
           extra_bonus: 'Acréscimo Extra (Não Abate)',
@@ -358,7 +400,7 @@ export class BprPdfService {
         autoTable(doc, {
           startY: nextY,
           head: [['Grupo de Montante Específico (Exclusivo)', 'Critério / Observação', 'Origem do Recurso', 'Rateio', 'Membros', 'Montante Grupo', 'Total Alocado']],
-          body: summary.dedicatedGroupSummaries.map(gs => [
+          body: visibleDedicatedSummaries.map(gs => [
             gs.name,
             gs.criteriaDescription || '—',
             fundingMap[gs.fundingSource] || gs.fundingSource,
@@ -577,6 +619,16 @@ export class BprPdfService {
         : 'Apenas Colaboradores Elegíveis';
     const camadasLabel = (meta?.selectedCamadas || ['E', 'T', 'O']).map(c => c === 'E' ? 'Estratégico' : c === 'T' ? 'Tático' : 'Operacional').join(', ');
     const compsLabel = (meta?.selectedCompanies && meta.selectedCompanies.length > 0) ? meta.selectedCompanies.join(', ') : 'Todas as Empresas';
+    const groupsFilterHtml = (meta?.selectedDedicatedGroupLabels && meta.selectedDedicatedGroupLabels.length > 0)
+      ? ` • Grupos: ${escapeHtml(meta.selectedDedicatedGroupLabels.join(', '))}`
+      : (meta?.selectedDedicatedGroupIds && meta.selectedDedicatedGroupIds.length > 0)
+        ? ` • Grupos: ${escapeHtml(meta.selectedDedicatedGroupIds.map(id => id === '__ALL_DEDICATED__' ? 'Somente Grupos Específicos' : id === '__STANDARD_LAYERS__' ? 'Somente Camadas E/T/O' : id).join(', '))}`
+        : '';
+    const visibleHtmlDedicatedSummaries = (summary.dedicatedGroupSummaries || []).filter(gs => {
+      const ids = meta?.selectedDedicatedGroupIds || [];
+      if (ids.length === 0 || ids.includes('__ALL_DEDICATED__')) return true;
+      return ids.includes(gs.groupId);
+    });
 
     const html = `
       <!DOCTYPE html>
@@ -796,7 +848,7 @@ export class BprPdfService {
         <!-- Escopo do Recorte Selecionado -->
         <div class="scope-banner">
           <div>
-            <strong>RECORTE DO RELATÓRIO:</strong> ${eligLabel} • Camadas: ${camadasLabel} • Empresas: ${compsLabel}${meta?.nameQuery?.trim() ? ` • Nome: "${escapeHtml(meta.nameQuery.trim())}"` : ''}
+            <strong>RECORTE DO RELATÓRIO:</strong> ${eligLabel} • Camadas: ${camadasLabel} • Empresas: ${compsLabel}${groupsFilterHtml}${meta?.nameQuery?.trim() ? ` • Nome: "${escapeHtml(meta.nameQuery.trim())}"` : ''}
           </div>
           <div style="font-weight: 800;">
             ${filteredCandidates.length} colaborador(es) listado(s)
@@ -872,7 +924,7 @@ export class BprPdfService {
               </tr>
             </tbody>
           </table>
-          ${(summary.dedicatedGroupSummaries && summary.dedicatedGroupSummaries.length > 0) ? `
+          ${visibleHtmlDedicatedSummaries.length > 0 ? `
             <div class="table-title" style="color: #0f766e;">Grupos de Montante Específico (Rateio Exclusivo fora das Camadas E/T/O)</div>
             <table>
               <thead>
@@ -887,7 +939,7 @@ export class BprPdfService {
                 </tr>
               </thead>
               <tbody>
-                ${summary.dedicatedGroupSummaries.map(gs => {
+                ${visibleHtmlDedicatedSummaries.map(gs => {
                   const fundingLabel = gs.fundingSource === 'total_pool'
                     ? 'Abate do Bolo Geral'
                     : gs.fundingSource === 'extra_bonus'
@@ -1077,7 +1129,8 @@ export class BprPdfService {
         const item = map.get(c.employeeId)!;
         item.scenarioValues[sc.id] = {
           amount: c.isEligible ? c.allocatedAmount : 0,
-          isEligible: c.isEligible
+          isEligible: c.isEligible,
+          dedicatedGroupName: c.dedicatedGroupName
         };
       });
     });
@@ -1091,11 +1144,81 @@ export class BprPdfService {
       rows.forEach(r => {
         const val1 = r.scenarioValues[id1]?.amount || 0;
         const val2 = r.scenarioValues[id2]?.amount || 0;
-        r.delta = val2 - val1;
+        r.delta = Number((val2 - val1).toFixed(2));
       });
     }
 
     return rows.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Constrói linhas comparativas dedicadas para os Grupos de Montante Específico entre cenários
+   * (com fallback de reconstrução via candidatesSnapshot para máxima resiliência).
+   */
+  static buildDedicatedGroupsComparisonRows(scenarios: BprSavedScenario[]): DedicatedGroupComparisonRow[] {
+    const map = new Map<string, DedicatedGroupComparisonRow>();
+
+    scenarios.forEach(sc => {
+      const summaries = sc.summary?.dedicatedGroupSummaries;
+      if (Array.isArray(summaries) && summaries.length > 0) {
+        summaries.forEach(gs => {
+          const cleanName = (gs.name || 'Grupo Específico').trim();
+          const key = normalizeSearchText(cleanName) || gs.groupId;
+          if (!map.has(key)) {
+            map.set(key, {
+              groupKey: key,
+              groupName: cleanName,
+              scenarioValues: {},
+            });
+          }
+          const entry = map.get(key)!;
+          const prev = entry.scenarioValues[sc.id];
+          entry.scenarioValues[sc.id] = {
+            allocatedTotal: Number(((prev?.allocatedTotal || 0) + (gs.allocatedTotal || 0)).toFixed(2)),
+            poolAmount: Number(((prev?.poolAmount || 0) + (gs.poolAmount || 0)).toFixed(2)),
+            memberCount: (prev?.memberCount || 0) + (gs.memberCount || 0),
+            distributionMode: gs.distributionMode,
+            fundingSource: gs.fundingSource,
+          };
+        });
+      } else if (Array.isArray(sc.candidatesSnapshot) && sc.candidatesSnapshot.length > 0) {
+        // Fallback: reconstruir a partir de candidatesSnapshot quando summary.dedicatedGroupSummaries não estiver salvo
+        const fallbackGroups = new Map<string, { name: string; allocated: number; members: number }>();
+        sc.candidatesSnapshot.forEach(c => {
+          if (!c.dedicatedGroupId && !c.dedicatedGroupName) return;
+          const cleanName = (c.dedicatedGroupName || 'Grupo Específico').trim();
+          const key = normalizeSearchText(cleanName) || (c.dedicatedGroupId || 'grupo');
+          const cur = fallbackGroups.get(key) || { name: cleanName, allocated: 0, members: 0 };
+          cur.allocated = Number((cur.allocated + (c.isEligible ? (c.rateioAmount ?? c.allocatedAmount ?? 0) : 0)).toFixed(2));
+          cur.members += 1;
+          fallbackGroups.set(key, cur);
+        });
+        fallbackGroups.forEach((fg, key) => {
+          if (!map.has(key)) {
+            map.set(key, { groupKey: key, groupName: fg.name, scenarioValues: {} });
+          }
+          map.get(key)!.scenarioValues[sc.id] = {
+            allocatedTotal: fg.allocated,
+            poolAmount: fg.allocated,
+            memberCount: fg.members,
+          };
+        });
+      }
+    });
+
+    const rows = Array.from(map.values());
+    if (scenarios.length >= 2) {
+      const id1 = scenarios[0].id;
+      const id2 = scenarios[1].id;
+      rows.forEach(r => {
+        const v1 = r.scenarioValues[id1];
+        const v2 = r.scenarioValues[id2];
+        r.deltaAmount = Number(((v2?.allocatedTotal || 0) - (v1?.allocatedTotal || 0)).toFixed(2));
+        r.deltaMembers = (v2?.memberCount || 0) - (v1?.memberCount || 0);
+      });
+    }
+
+    return rows.sort((a, b) => a.groupName.localeCompare(b.groupName, 'pt-BR'));
   }
 
   /**
@@ -1111,6 +1234,7 @@ export class BprPdfService {
       unit: 'mm',
       format: 'a4'
     });
+    const docWithLast = doc as jsPDF & { lastAutoTable?: { finalY?: number } };
 
     // Cabeçalho
     doc.setFont('helvetica', 'bold');
@@ -1149,7 +1273,67 @@ export class BprPdfService {
       bodyStyles: { fontSize: 7 }
     });
 
-    const finalY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 6 : 60;
+    let nextY = docWithLast.lastAutoTable?.finalY ? docWithLast.lastAutoTable.finalY + 5 : 60;
+
+    // Tabela 1B: Comparativo Dedicado de Grupos de Montante Específico (quando presentes)
+    const groupCompRows = this.buildDedicatedGroupsComparisonRows(scenarios);
+    if (groupCompRows.length > 0) {
+      const grpHeaders = [
+        'Grupo de Montante Específico (Exclusivo)',
+        ...scenarios.map((s, idx) => `#${idx + 1} · ${s.name.length > 18 ? `${s.name.slice(0, 16)}...` : s.name}`),
+        ...(scenarios.length >= 2 ? ['Delta (#2 vs #1)'] : [])
+      ];
+      const grpBody = groupCompRows.map(gr => {
+        const scCols = scenarios.map(s => {
+          const val = gr.scenarioValues[s.id];
+          if (!val || (val.allocatedTotal === 0 && val.memberCount === 0)) return '—';
+          return `${formatCurrency(val.allocatedTotal)} (${val.memberCount}p)`;
+        });
+        const deltaCol = scenarios.length >= 2
+          ? `${(gr.deltaAmount || 0) > 0 ? '+' : ''}${formatCurrency(gr.deltaAmount || 0)} (${(gr.deltaMembers || 0) > 0 ? '+' : ''}${gr.deltaMembers || 0}p)`
+          : null;
+        return [gr.groupName, ...scCols, ...(deltaCol ? [deltaCol] : [])];
+      });
+
+      const grpFootTotals = scenarios.map(s => {
+        const totAmt = groupCompRows.reduce((acc, gr) => acc + (gr.scenarioValues[s.id]?.allocatedTotal || 0), 0);
+        const totMem = groupCompRows.reduce((acc, gr) => acc + (gr.scenarioValues[s.id]?.memberCount || 0), 0);
+        return `${formatCurrency(totAmt)} (${totMem}p)`;
+      });
+      const totDeltaAmt = scenarios.length >= 2
+        ? groupCompRows.reduce((acc, gr) => acc + (gr.deltaAmount || 0), 0)
+        : 0;
+      const totDeltaMem = scenarios.length >= 2
+        ? groupCompRows.reduce((acc, gr) => acc + (gr.deltaMembers || 0), 0)
+        : 0;
+
+      autoTable(doc, {
+        startY: nextY,
+        head: [grpHeaders],
+        body: grpBody,
+        foot: [[
+          'TOTAL GRUPOS ESPECÍFICOS',
+          ...grpFootTotals,
+          ...(scenarios.length >= 2 ? [`${totDeltaAmt > 0 ? '+' : ''}${formatCurrency(totDeltaAmt)} (${totDeltaMem > 0 ? '+' : ''}${totDeltaMem}p)`] : [])
+        ]],
+        theme: 'grid',
+        headStyles: {
+          fillColor: [15, 118, 110],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 7.5
+        },
+        bodyStyles: { fontSize: 7 },
+        footStyles: {
+          fillColor: [240, 253, 250],
+          textColor: [15, 118, 110],
+          fontStyle: 'bold',
+          fontSize: 7
+        }
+      });
+
+      nextY = docWithLast.lastAutoTable?.finalY ? docWithLast.lastAutoTable.finalY + 6 : nextY + 25;
+    }
 
     // Cabeçalhos dinâmicos da tabela analítica
     const tableHeaders = [
@@ -1165,7 +1349,9 @@ export class BprPdfService {
       const scenarioCols = scenarios.map(s => {
         const item = r.scenarioValues[s.id];
         if (!item || !item.isEligible) return 'R$ 0,00';
-        return formatCurrency(item.amount);
+        return item.dedicatedGroupName
+          ? `${formatCurrency(item.amount)}\n[Grupo: ${item.dedicatedGroupName}]`
+          : formatCurrency(item.amount);
       });
 
       const deltaCol = scenarios.length >= 2
@@ -1183,7 +1369,7 @@ export class BprPdfService {
     });
 
     autoTable(doc, {
-      startY: finalY,
+      startY: nextY,
       head: [tableHeaders],
       body: bodyRows,
       theme: 'striped',
@@ -1213,7 +1399,7 @@ export class BprPdfService {
     });
 
     // Bloco de Assinaturas Executivas
-    const finalTableY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY : 170;
+    const finalTableY = docWithLast.lastAutoTable?.finalY ?? 170;
     const pageHeight = doc.internal.pageSize.getHeight();
     let sigY = finalTableY + 18;
     if (sigY + 25 > pageHeight) {
@@ -1262,6 +1448,14 @@ export class BprPdfService {
       alert('Por favor, permita popups neste site para visualizar o comparativo.');
       return;
     }
+
+    const groupCompRows = this.buildDedicatedGroupsComparisonRows(scenarios);
+    const totalGrpDeltaAmt = scenarios.length >= 2
+      ? groupCompRows.reduce((acc, gr) => acc + (gr.deltaAmount || 0), 0)
+      : 0;
+    const totalGrpDeltaMem = scenarios.length >= 2
+      ? groupCompRows.reduce((acc, gr) => acc + (gr.deltaMembers || 0), 0)
+      : 0;
 
     const html = `
       <!DOCTYPE html>
@@ -1322,6 +1516,56 @@ export class BprPdfService {
           </tbody>
         </table>
 
+        ${groupCompRows.length > 0 ? `
+          <div style="font-size: 10px; font-weight: 900; color: #0f766e; text-transform: uppercase; margin: 12px 0 6px;">
+            Grupos de Montante Específico — Comparativo Lado a Lado (Rateio Exclusivo)
+          </div>
+          <table style="margin-bottom: 20px;">
+            <thead>
+              <tr>
+                <th style="background: #0f766e; border-color: #0f766e;">Grupo Específico</th>
+                ${scenarios.map((s, idx) => `<th style="background: #0f766e; border-color: #0f766e; text-align: right;">#${idx + 1} · ${escapeHtml(s.name)}</th>`).join('')}
+                ${scenarios.length >= 2 ? '<th style="background: #0f766e; border-color: #0f766e; text-align: right;">Delta (#2 vs #1)</th>' : ''}
+              </tr>
+            </thead>
+            <tbody>
+              ${groupCompRows.map(gr => `
+                <tr>
+                  <td><strong style="color: #0f766e;">${escapeHtml(gr.groupName)}</strong></td>
+                  ${scenarios.map(s => {
+                    const v = gr.scenarioValues[s.id];
+                    if (!v || (v.allocatedTotal === 0 && v.memberCount === 0)) {
+                      return '<td class="amount" style="color: #94a3b8;">—</td>';
+                    }
+                    return `<td class="amount">${formatCurrency(v.allocatedTotal)} <span style="font-size: 8.5px; color: #64748b; font-weight: 600;">(${v.memberCount}p)</span></td>`;
+                  }).join('')}
+                  ${scenarios.length >= 2 ? `
+                    <td class="amount" style="background-color: ${(gr.deltaAmount || 0) > 0 ? '#ecfdf5' : (gr.deltaAmount || 0) < 0 ? '#fef2f2' : 'transparent'}; color: ${(gr.deltaAmount || 0) > 0 ? '#047857' : (gr.deltaAmount || 0) < 0 ? '#be123c' : '#64748b'};">
+                      ${(gr.deltaAmount || 0) > 0 ? '+' : ''}${formatCurrency(gr.deltaAmount || 0)}
+                      <span style="font-size: 8.5px; font-weight: 700;">(${(gr.deltaMembers || 0) > 0 ? '+' : ''}${gr.deltaMembers || 0}p)</span>
+                    </td>
+                  ` : ''}
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background: #f0fdfa; font-weight: 900;">
+                <td style="color: #0f766e;">TOTAL GRUPOS ESPECÍFICOS</td>
+                ${scenarios.map(s => {
+                  const totAmt = groupCompRows.reduce((acc, gr) => acc + (gr.scenarioValues[s.id]?.allocatedTotal || 0), 0);
+                  const totMem = groupCompRows.reduce((acc, gr) => acc + (gr.scenarioValues[s.id]?.memberCount || 0), 0);
+                  return `<td class="amount" style="color: #0f766e;">${formatCurrency(totAmt)} (${totMem}p)</td>`;
+                }).join('')}
+                ${scenarios.length >= 2 ? `
+                  <td class="amount" style="color: ${totalGrpDeltaAmt > 0 ? '#047857' : totalGrpDeltaAmt < 0 ? '#be123c' : '#64748b'};">
+                    ${totalGrpDeltaAmt > 0 ? '+' : ''}${formatCurrency(totalGrpDeltaAmt)} (${totalGrpDeltaMem > 0 ? '+' : ''}${totalGrpDeltaMem}p)
+                  </td>
+                ` : ''}
+              </tr>
+            </tfoot>
+          </table>
+        ` : ''}
+
         <table>
           <thead>
             <tr>
@@ -1329,21 +1573,24 @@ export class BprPdfService {
               <th>Empresa</th>
               <th>Cargo</th>
               <th>Camada</th>
-              ${scenarios.map(s => `<th style="text-align: right;">${s.name}</th>`).join('')}
+              ${scenarios.map(s => `<th style="text-align: right;">${escapeHtml(s.name)}</th>`).join('')}
               ${scenarios.length >= 2 ? '<th style="text-align: right;">Diferença (Delta)</th>' : ''}
             </tr>
           </thead>
           <tbody>
             ${rows.map(r => `
               <tr>
-                <td><strong>${r.corporateName || r.name}</strong></td>
-                <td>${r.company}</td>
-                <td>${r.jobRole}</td>
-                <td>${r.camadaLabel}</td>
+                <td><strong>${escapeHtml(r.corporateName || r.name)}</strong></td>
+                <td>${escapeHtml(r.company)}</td>
+                <td>${escapeHtml(r.jobRole)}</td>
+                <td>${escapeHtml(r.camadaLabel)}</td>
                 ${scenarios.map(s => {
                   const item = r.scenarioValues[s.id];
                   const amt = item && item.isEligible ? item.amount : 0;
-                  return `<td class="amount" style="color: ${amt > 0 ? '#0f172a' : '#94a3b8'};">${formatCurrency(amt)}</td>`;
+                  const grpBadge = item?.dedicatedGroupName
+                    ? `<div style="font-size: 8px; color: #0f766e; font-weight: 700;">Grupo: ${escapeHtml(item.dedicatedGroupName)}</div>`
+                    : '';
+                  return `<td class="amount" style="color: ${amt > 0 ? '#0f172a' : '#94a3b8'};">${formatCurrency(amt)}${grpBadge}</td>`;
                 }).join('')}
                 ${scenarios.length >= 2 ? `
                   <td class="amount" style="background-color: ${(r.delta || 0) > 0 ? '#ecfdf5' : (r.delta || 0) < 0 ? '#fef2f2' : 'transparent'}; color: ${(r.delta || 0) > 0 ? '#047857' : (r.delta || 0) < 0 ? '#be123c' : '#64748b'}; font-weight: bold; padding: 4px 8px; border-radius: 4px;">

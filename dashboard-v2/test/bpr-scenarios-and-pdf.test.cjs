@@ -1282,4 +1282,155 @@ assert.strictEqual(Number.isNaN(resNeg.totalDistributedAmount), false);
 
 console.log('   ✅ Grupos de Montante Específico (exclusividade, %, R$, igualitário, origens de recurso, exceções e proteção contra duplicidade) validados com 100% de precisão!');
 
+// 22. Testando BprPdfService real: Comparativo Dedicado de Grupos entre Cenários + Filtro por Grupo Específico no PDF
+console.log('\n22. Testando BprPdfService real (Comparativo por Grupo Específico e Filtro por Grupo no PDF)...');
+
+const loadRealBprPdfService = () => {
+  const fsMod = require('fs');
+  const pathMod = require('path');
+  const vmMod = require('vm');
+  const tsMod = require('typescript');
+  const pdfSvcPath = pathMod.resolve(__dirname, '../src/services/bpr-pdf.service.ts');
+  const src = fsMod.readFileSync(pdfSvcPath, 'utf8');
+  const transpiled = tsMod.transpileModule(src, {
+    compilerOptions: { module: tsMod.ModuleKind.CommonJS, target: tsMod.ScriptTarget.ES2020 },
+  }).outputText;
+  const mod = { exports: {} };
+  const customRequire = (req) => {
+    if (req === 'jspdf') return { jsPDF: function MockJsPdf() {} };
+    if (req === 'jspdf-autotable') return () => {};
+    return require(req);
+  };
+  vmMod.runInNewContext(transpiled, {
+    module: mod,
+    exports: mod.exports,
+    require: customRequire,
+    console,
+    Intl,
+  });
+  return mod.exports.BprPdfService;
+};
+
+const RealBprPdfService = loadRealBprPdfService();
+
+// 22A. Filtro por Grupo Específico em filterCandidates
+const pdfCandidates = [
+  { employeeId: 'p1', name: 'Alice Dir', company: 'MarBR', camada: 'E', camadaLabel: 'Estratégico', isEligible: true, allocatedAmount: 15000, dedicatedGroupId: 'grp-alpha', dedicatedGroupName: 'Projeto Alpha' },
+  { employeeId: 'p2', name: 'Bruno Ger', company: 'DZM', camada: 'T', camadaLabel: 'Tático', isEligible: true, allocatedAmount: 10000, dedicatedGroupId: 'grp-beta', dedicatedGroupName: 'Comercial' },
+  { employeeId: 'p3', name: 'Carla Op', company: 'MarBR', camada: 'O', camadaLabel: 'Operacional/CLTs', isEligible: true, allocatedAmount: 5000 },
+  { employeeId: 'p4', name: 'Daniel Ineleg', company: 'MarBR', camada: 'O', camadaLabel: 'Operacional/CLTs', isEligible: false, allocatedAmount: 0 },
+];
+
+// Padrão (sem filtro de grupo): retorna todos elegíveis (3)
+assert.strictEqual(RealBprPdfService.filterCandidates(pdfCandidates, { eligibilityFilter: 'eligible_only' }).length, 3);
+// Somente Grupos Específicos (__ALL_DEDICATED__): retorna p1 e p2 (2)
+const onlyGroups = RealBprPdfService.filterCandidates(pdfCandidates, { eligibilityFilter: 'eligible_only', selectedDedicatedGroupIds: ['__ALL_DEDICATED__'] });
+assert.strictEqual(onlyGroups.length, 2);
+// Somente Camadas E/T/O (__STANDARD_LAYERS__): retorna apenas p3 (1)
+const onlyStd = RealBprPdfService.filterCandidates(pdfCandidates, { eligibilityFilter: 'eligible_only', selectedDedicatedGroupIds: ['__STANDARD_LAYERS__'] });
+assert.strictEqual(onlyStd.length, 1);
+assert.strictEqual(onlyStd[0].employeeId, 'p3');
+// Grupo específico único (grp-alpha): retorna apenas p1 (1)
+const onlyAlpha = RealBprPdfService.filterCandidates(pdfCandidates, { eligibilityFilter: 'eligible_only', selectedDedicatedGroupIds: ['grp-alpha'] });
+assert.strictEqual(onlyAlpha.length, 1);
+assert.strictEqual(onlyAlpha[0].employeeId, 'p1');
+// Múltiplos grupos específicos combinados com filtro de empresa DZM: retorna apenas p2
+const multiGroupDzm = RealBprPdfService.filterCandidates(pdfCandidates, {
+  eligibilityFilter: 'eligible_only',
+  selectedDedicatedGroupIds: ['grp-alpha', 'grp-beta'],
+  selectedCompanies: ['DZM'],
+});
+assert.strictEqual(multiGroupDzm.length, 1);
+assert.strictEqual(multiGroupDzm[0].employeeId, 'p2');
+// Caso vazio
+assert.strictEqual(RealBprPdfService.filterCandidates([], { selectedDedicatedGroupIds: ['grp-alpha'] }).length, 0);
+
+// 22B. Comparativo Dedicado de Grupos entre Cenários (com e sem grupos, mudança de montante/membros e fallback via snapshot)
+const scSemGrupo = {
+  id: 'sc-1',
+  name: 'Cenário Base (Sem Grupos)',
+  studyDate: '2026-11-24',
+  criteriaDescription: 'Padrão E/T/O',
+  createdAt: '2026-11-24T10:00:00Z',
+  config: cfgDedicatedOff,
+  summary: {
+    totalPoolAmount: 100000,
+    totalDistributedAmount: 100000,
+    residualAmount: 0,
+    totalCandidates: 3,
+    totalEligible: 3,
+    totalIneligible: 0,
+    amountPerE: 30000,
+    amountPerT: 40000,
+    amountPerO: 30000,
+    layers: resOff.layers,
+    dedicatedGroupSummaries: [],
+  },
+  candidatesSnapshot: [
+    { employeeId: 'p1', name: 'Alice Dir', company: 'MarBR', department: 'Dir', jobRole: 'Diretora', camada: 'E', camadaLabel: 'Estratégico', isEligible: true, allocatedAmount: 30000 },
+    { employeeId: 'p2', name: 'Bruno Ger', company: 'DZM', department: 'Com', jobRole: 'Gerente', camada: 'T', camadaLabel: 'Tático', isEligible: true, allocatedAmount: 40000 },
+  ],
+};
+
+const scComGrupo = {
+  id: 'sc-2',
+  name: 'Cenário Com Projeto Alpha',
+  studyDate: '2026-11-24',
+  criteriaDescription: 'Com Grupo Projeto Alpha',
+  createdAt: '2026-11-24T10:05:00Z',
+  config: cfgDedicatedPct,
+  summary: {
+    totalPoolAmount: 100000,
+    totalDistributedAmount: 100000,
+    residualAmount: 0,
+    totalCandidates: 3,
+    totalEligible: 3,
+    totalIneligible: 0,
+    amountPerE: 24000,
+    amountPerT: 32000,
+    amountPerO: 24000,
+    layers: resPct.layers,
+    dedicatedGroupSummaries: [
+      { groupId: 'g-alpha-v2', name: 'Projeto Alpha', fundingSource: 'total_pool', distributionMode: 'percentage', poolAmount: 20000, allocatedTotal: 20000, memberCount: 2, residualAmount: 0 },
+    ],
+  },
+  candidatesSnapshot: [
+    { employeeId: 'p1', name: 'Alice Dir', company: 'MarBR', department: 'Dir', jobRole: 'Diretora', camada: 'E', camadaLabel: 'Estratégico', isEligible: true, allocatedAmount: 12000, dedicatedGroupId: 'g-alpha-v2', dedicatedGroupName: 'Projeto Alpha' },
+    { employeeId: 'p2', name: 'Bruno Ger', company: 'DZM', department: 'Com', jobRole: 'Gerente', camada: 'T', camadaLabel: 'Tático', isEligible: true, allocatedAmount: 32000 },
+  ],
+};
+
+const grpCompRows = RealBprPdfService.buildDedicatedGroupsComparisonRows([scSemGrupo, scComGrupo]);
+assert.strictEqual(grpCompRows.length, 1);
+assert.strictEqual(grpCompRows[0].groupName, 'Projeto Alpha');
+assert.strictEqual(grpCompRows[0].scenarioValues['sc-1'], undefined);
+assert.strictEqual(grpCompRows[0].scenarioValues['sc-2'].allocatedTotal, 20000);
+assert.strictEqual(grpCompRows[0].scenarioValues['sc-2'].memberCount, 2);
+assert.strictEqual(grpCompRows[0].deltaAmount, 20000);
+assert.strictEqual(grpCompRows[0].deltaMembers, 2);
+
+// 22C. Fallback de reconstrução via candidatesSnapshot + matching por nome normalizado (acento/caixa diferentes)
+const scFallbackSnapshot = {
+  ...scComGrupo,
+  id: 'sc-3',
+  name: 'Cenário Fallback Snapshot',
+  summary: { ...scComGrupo.summary, dedicatedGroupSummaries: undefined },
+  candidatesSnapshot: [
+    { employeeId: 'p1', name: 'Alice Dir', company: 'MarBR', department: 'Dir', jobRole: 'Diretora', camada: 'E', camadaLabel: 'Estratégico', isEligible: true, rateioAmount: 15000, allocatedAmount: 15000, dedicatedGroupId: 'other-id', dedicatedGroupName: 'projeto alpha' },
+  ],
+};
+const grpCompCross = RealBprPdfService.buildDedicatedGroupsComparisonRows([scComGrupo, scFallbackSnapshot]);
+assert.strictEqual(grpCompCross.length, 1); // mesmo nome normalizado agrupado na mesma linha!
+assert.strictEqual(grpCompCross[0].deltaAmount, -5000); // 15.000 - 20.000
+assert.strictEqual(grpCompCross[0].deltaMembers, -1);   // 1 - 2
+
+// 22D. Propagação de dedicatedGroupName em buildComparisonRows
+const empCompRows = RealBprPdfService.buildComparisonRows([scSemGrupo, scComGrupo]);
+const aliceComp = empCompRows.find(r => r.employeeId === 'p1');
+assert.strictEqual(aliceComp.scenarioValues['sc-1'].dedicatedGroupName, undefined);
+assert.strictEqual(aliceComp.scenarioValues['sc-2'].dedicatedGroupName, 'Projeto Alpha');
+assert.strictEqual(aliceComp.delta, -18000);
+
+console.log('   ✅ BprPdfService real (comparativo dedicado de grupos, fallback snapshot e filtro por grupo no PDF) validado com 100% de precisão!');
+
 console.log('\n🎉 TODOS OS TESTES DO BPR E PEOPLE PASSARAM COM EXATIDÃO!');

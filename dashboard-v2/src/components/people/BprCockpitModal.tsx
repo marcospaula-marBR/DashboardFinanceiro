@@ -81,6 +81,7 @@ export function BprCockpitModal({
   const [exportEligibility, setExportEligibility] = useState<'eligible_only' | 'ineligible_only' | 'all'>('eligible_only');
   const [exportSelectedCamadas, setExportSelectedCamadas] = useState<BprCamada[]>(['E', 'T', 'O']);
   const [exportSelectedCompanies, setExportSelectedCompanies] = useState<string[]>([]);
+  const [exportSelectedDedicatedGroupIds, setExportSelectedDedicatedGroupIds] = useState<string[]>([]);
   const [exportNameQuery, setExportNameQuery] = useState('');
   const [exportIncludeSummaryCards, setExportIncludeSummaryCards] = useState(true);
   const [exportIncludeLayerSummary, setExportIncludeLayerSummary] = useState(true);
@@ -666,6 +667,7 @@ export function BprCockpitModal({
     setExportEligibility('eligible_only');
     setExportSelectedCamadas(['E', 'T', 'O']);
     setExportSelectedCompanies([]);
+    setExportSelectedDedicatedGroupIds([]);
     setExportNameQuery('');
     setExportIncludeSummaryCards(true);
     setExportIncludeLayerSummary(true);
@@ -673,15 +675,64 @@ export function BprCockpitModal({
     setIsExportOptionsModalOpen(true);
   };
 
+  // Grupos de Montante Específico disponíveis no escopo alvo da exportação
+  const availableExportDedicatedGroups = useMemo(() => {
+    const activeSumm = exportCustomTargetSummary || summary;
+    if (activeSumm.dedicatedGroupSummaries && activeSumm.dedicatedGroupSummaries.length > 0) {
+      return activeSumm.dedicatedGroupSummaries.map(gs => ({
+        id: gs.groupId,
+        name: gs.name,
+        memberCount: gs.memberCount,
+        allocatedTotal: gs.allocatedTotal,
+      }));
+    }
+    const byId = new Map<string, { id: string; name: string; memberCount: number; allocatedTotal: number }>();
+    (activeSumm.candidates || []).forEach(c => {
+      if (!c.dedicatedGroupId) return;
+      const prev = byId.get(c.dedicatedGroupId) || {
+        id: c.dedicatedGroupId,
+        name: c.dedicatedGroupName || 'Grupo Específico',
+        memberCount: 0,
+        allocatedTotal: 0,
+      };
+      prev.memberCount += 1;
+      prev.allocatedTotal = Number((prev.allocatedTotal + (c.isEligible ? c.allocatedAmount : 0)).toFixed(2));
+      byId.set(c.dedicatedGroupId, prev);
+    });
+    return Array.from(byId.values());
+  }, [exportCustomTargetSummary, summary]);
+
+  const handleToggleExportDedicatedGroup = (id: string) => {
+    if (!id) {
+      setExportSelectedDedicatedGroupIds([]);
+      return;
+    }
+    if (id === '__ALL_DEDICATED__' || id === '__STANDARD_LAYERS__') {
+      setExportSelectedDedicatedGroupIds(prev => (prev.length === 1 && prev[0] === id ? [] : [id]));
+      return;
+    }
+    setExportSelectedDedicatedGroupIds(prev => {
+      const cleaned = prev.filter(item => item !== '__ALL_DEDICATED__' && item !== '__STANDARD_LAYERS__');
+      return cleaned.includes(id) ? cleaned.filter(item => item !== id) : [...cleaned, id];
+    });
+  };
+
   // Confirmar Exportação com Filtros Selecionados
   const handleConfirmExportPdf = (mode: 'download' | 'print') => {
     const activeSumm = exportCustomTargetSummary || summary;
     const activeConf = exportCustomTargetConfig || config;
+    const selectedGroupLabels = exportSelectedDedicatedGroupIds.map(id => {
+      if (id === '__ALL_DEDICATED__') return 'Somente Grupos Específicos';
+      if (id === '__STANDARD_LAYERS__') return 'Somente Camadas E/T/O';
+      return availableExportDedicatedGroups.find(g => g.id === id)?.name || id;
+    });
     const fullMeta: BprPdfMeta = {
       ...(exportCustomTargetMeta || {}),
       eligibilityFilter: exportEligibility,
       selectedCamadas: exportSelectedCamadas,
       selectedCompanies: exportSelectedCompanies,
+      selectedDedicatedGroupIds: exportSelectedDedicatedGroupIds,
+      selectedDedicatedGroupLabels: selectedGroupLabels,
       nameQuery: exportNameQuery.trim() || undefined,
       includeSummaryCards: exportIncludeSummaryCards,
       includeLayerSummary: exportIncludeLayerSummary,
@@ -704,9 +755,10 @@ export function BprCockpitModal({
       eligibilityFilter: exportEligibility,
       selectedCamadas: exportSelectedCamadas,
       selectedCompanies: exportSelectedCompanies,
+      selectedDedicatedGroupIds: exportSelectedDedicatedGroupIds,
       nameQuery: exportNameQuery.trim() || undefined
     });
-  }, [exportCustomTargetSummary, summary, exportEligibility, exportSelectedCamadas, exportSelectedCompanies, exportNameQuery]);
+  }, [exportCustomTargetSummary, summary, exportEligibility, exportSelectedCamadas, exportSelectedCompanies, exportSelectedDedicatedGroupIds, exportNameQuery]);
 
   const exportPreviewTotalDistributed = useMemo(() => {
     return exportPreviewCandidates.reduce((s, c) => s + (c.isEligible ? c.allocatedAmount : 0), 0);
@@ -779,6 +831,12 @@ export function BprCockpitModal({
     });
     return out;
   }, [scenariosToCompare, employees, monthlyCosts]);
+
+  // Linhas Comparativas Dedicadas para Grupos de Montante Específico entre Cenários
+  const dedicatedGroupComparisonRows = useMemo(() => {
+    if (scenariosToCompare.length === 0) return [];
+    return BprPdfService.buildDedicatedGroupsComparisonRows(scenariosToCompare);
+  }, [scenariosToCompare]);
 
   // Linhas Analíticas do Comparador
   const comparisonRows = useMemo(() => {
@@ -3162,7 +3220,12 @@ export function BprCockpitModal({
                           <button
                             type="button"
                             onClick={() => handleOpenExportOptionsModal(
-                              scenario.summary as any,
+                              {
+                                ...scenario.summary,
+                                candidates: scenario.candidatesSnapshot || [],
+                                glosadosCandidates: (scenario.candidatesSnapshot || []).filter(c => c.hasGlosaInPeriod),
+                                inativosCandidates: (scenario.candidatesSnapshot || []).filter(c => c.isInactiveAtPaymentDate),
+                              },
                               scenario.config,
                               { scenarioName: scenario.name, studyDate: scenario.studyDate, criteria: scenario.criteriaDescription }
                             )}
@@ -3176,7 +3239,12 @@ export function BprCockpitModal({
                           <button
                             type="button"
                             onClick={() => handleOpenExportOptionsModal(
-                              scenario.summary as any,
+                              {
+                                ...scenario.summary,
+                                candidates: scenario.candidatesSnapshot || [],
+                                glosadosCandidates: (scenario.candidatesSnapshot || []).filter(c => c.hasGlosaInPeriod),
+                                inativosCandidates: (scenario.candidatesSnapshot || []).filter(c => c.isInactiveAtPaymentDate),
+                              },
                               scenario.config,
                               { scenarioName: scenario.name, studyDate: scenario.studyDate, criteria: scenario.criteriaDescription }
                             )}
@@ -3348,6 +3416,14 @@ export function BprCockpitModal({
                           <strong className="text-slate-800">{sc.summary.totalEligible} pessoas</strong>
                         </div>
                       </div>
+                      {(sc.summary.dedicatedGroupsAllocatedTotal || 0) > 0 && (
+                        <div className="pt-1 border-t border-slate-200/70 flex items-center justify-between text-[10px] font-mono">
+                          <span className="font-sans font-bold text-teal-700 uppercase">Grupos Específicos:</span>
+                          <strong className="text-teal-800 font-black">
+                            {formatCurrency(sc.summary.dedicatedGroupsAllocatedTotal || 0)} ({sc.summary.dedicatedMembersCount || 0}p)
+                          </strong>
+                        </div>
+                      )}
                       {hasHist && scWeights && (
                         <div className="pt-1.5 border-t border-slate-200/70 space-y-1">
                           <span className="text-[9px] font-black text-sky-700 uppercase block tracking-wider">
@@ -3460,6 +3536,108 @@ export function BprCockpitModal({
                   </div>
                 </div>
               )}
+
+              {/* Quadro Comparativo Dedicado: Grupos de Montante Específico (Rateio Exclusivo) */}
+              {dedicatedGroupComparisonRows.length > 0 && (
+                <div className="rounded-2xl border border-teal-200 bg-teal-50/40 overflow-hidden">
+                  <div className="px-3.5 py-2 bg-teal-100/70 border-b border-teal-200 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                      <Users size={13} className="text-teal-700" />
+                      Grupos de Montante Específico — Comparativo por Grupo (Rateio Exclusivo)
+                    </span>
+                    <span className="text-[10px] font-bold text-teal-700">
+                      Montante Alocado (R$) · Membros · Variação (#2 vs #1)
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="bg-white border-b border-teal-100 text-[10px] font-black uppercase text-slate-500">
+                          <th className="py-2 px-3">Grupo Específico</th>
+                          {scenariosToCompare.map((sc, idx) => (
+                            <th key={sc.id} className="py-2 px-3 text-right">
+                              #{idx + 1} · {sc.name.length > 22 ? `${sc.name.slice(0, 20)}...` : sc.name}
+                            </th>
+                          ))}
+                          {scenariosToCompare.length >= 2 && (
+                            <th className="py-2 px-3 text-right">Delta (#2 vs #1)</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-teal-100/80 bg-white">
+                        {dedicatedGroupComparisonRows.map(gr => (
+                          <tr key={gr.groupKey}>
+                            <td className="py-2 px-3 font-black text-teal-900">{gr.groupName}</td>
+                            {scenariosToCompare.map(sc => {
+                              const val = gr.scenarioValues[sc.id];
+                              const hasVal = Boolean(val && (val.allocatedTotal > 0 || val.memberCount > 0));
+                              return (
+                                <td key={sc.id} className="py-2 px-3 text-right font-mono">
+                                  {hasVal && val ? (
+                                    <span className="font-bold text-slate-900">
+                                      {formatCurrency(val.allocatedTotal)}{' '}
+                                      <span className="text-[10px] text-teal-700 font-black">({val.memberCount}p)</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                            {scenariosToCompare.length >= 2 && (
+                              <td className="py-2 px-3 text-right font-mono font-black">
+                                <span className={
+                                  (gr.deltaAmount || 0) > 0
+                                    ? 'text-emerald-700'
+                                    : (gr.deltaAmount || 0) < 0
+                                      ? 'text-rose-600'
+                                      : 'text-slate-400'
+                                }>
+                                  {(gr.deltaAmount || 0) > 0 ? '+' : ''}{formatCurrency(gr.deltaAmount || 0)}
+                                </span>
+                                <span className="text-[10px] text-slate-500 ml-1">
+                                  ({(gr.deltaMembers || 0) > 0 ? '+' : ''}{gr.deltaMembers || 0}p)
+                                </span>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-teal-50/70 border-t border-teal-200 font-black">
+                          <td className="py-2 px-3 text-teal-900 uppercase text-[11px]">Total Grupos Específicos</td>
+                          {scenariosToCompare.map(sc => {
+                            const totAmt = dedicatedGroupComparisonRows.reduce((acc, gr) => acc + (gr.scenarioValues[sc.id]?.allocatedTotal || 0), 0);
+                            const totMem = dedicatedGroupComparisonRows.reduce((acc, gr) => acc + (gr.scenarioValues[sc.id]?.memberCount || 0), 0);
+                            return (
+                              <td key={sc.id} className="py-2 px-3 text-right font-mono text-teal-900">
+                                {formatCurrency(totAmt)}{' '}
+                                <span className="text-[10px] text-teal-700">({totMem}p)</span>
+                              </td>
+                            );
+                          })}
+                          {scenariosToCompare.length >= 2 && (() => {
+                            const totDeltaAmt = dedicatedGroupComparisonRows.reduce((acc, gr) => acc + (gr.deltaAmount || 0), 0);
+                            const totDeltaMem = dedicatedGroupComparisonRows.reduce((acc, gr) => acc + (gr.deltaMembers || 0), 0);
+                            return (
+                              <td className="py-2 px-3 text-right font-mono font-black">
+                                <span className={
+                                  totDeltaAmt > 0 ? 'text-emerald-700' : totDeltaAmt < 0 ? 'text-rose-600' : 'text-slate-500'
+                                }>
+                                  {totDeltaAmt > 0 ? '+' : ''}{formatCurrency(totDeltaAmt)}
+                                </span>
+                                <span className="text-[10px] text-slate-600 ml-1">
+                                  ({totDeltaMem > 0 ? '+' : ''}{totDeltaMem}p)
+                                </span>
+                              </td>
+                            );
+                          })()}
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Barra de Filtros da Tabela Comparativa */}
@@ -3537,9 +3715,14 @@ export function BprCockpitModal({
                           return (
                             <td key={sc.id} className="py-2.5 px-3 text-right font-mono font-bold">
                               {amt > 0 ? (
-                                <span className="text-slate-900">{formatCurrency(amt)}</span>
+                                <span className="text-slate-900 block">{formatCurrency(amt)}</span>
                               ) : (
-                                <span className="text-slate-300">R$ 0,00</span>
+                                <span className="text-slate-300 block">R$ 0,00</span>
+                              )}
+                              {item?.dedicatedGroupName && (
+                                <span className="inline-block mt-0.5 text-[9px] font-sans font-black px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                                  Grupo: {item.dedicatedGroupName}
+                                </span>
                               )}
                             </td>
                           );
@@ -4093,6 +4276,86 @@ export function BprCockpitModal({
                   })}
                 </div>
               </div>
+
+              {/* 2B. FILTRO POR GRUPO DE MONTANTE ESPECÍFICO (QUANDO EXISTIREM GRUPOS) */}
+              {availableExportDedicatedGroups.length > 0 && (
+                <div className="space-y-2 bg-teal-50/50 border border-teal-200 rounded-2xl p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-xs font-black text-teal-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Users size={13} className="text-teal-700" />
+                      <span>Grupos de Montante Específico (Opcional):</span>
+                    </label>
+                    {exportSelectedDedicatedGroupIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleExportDedicatedGroup('')}
+                        className="text-[11px] text-teal-700 hover:underline font-bold cursor-pointer"
+                      >
+                        Mostrar Todos
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleExportDedicatedGroup('')}
+                      className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        exportSelectedDedicatedGroupIds.length === 0
+                          ? 'bg-teal-600 text-white shadow-sm font-black'
+                          : 'bg-white text-slate-600 hover:bg-teal-50 border border-slate-200'
+                      }`}
+                    >
+                      Todos (Camadas + Grupos)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleExportDedicatedGroup('__ALL_DEDICATED__')}
+                      className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        exportSelectedDedicatedGroupIds.includes('__ALL_DEDICATED__')
+                          ? 'bg-teal-800 text-white shadow-sm font-black'
+                          : 'bg-white text-teal-800 hover:bg-teal-50 border border-teal-200'
+                      }`}
+                    >
+                      <span>Somente Grupos Específicos</span>
+                      {exportSelectedDedicatedGroupIds.includes('__ALL_DEDICATED__') && <Check size={12} />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleExportDedicatedGroup('__STANDARD_LAYERS__')}
+                      className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        exportSelectedDedicatedGroupIds.includes('__STANDARD_LAYERS__')
+                          ? 'bg-slate-800 text-white shadow-sm font-black'
+                          : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                      }`}
+                    >
+                      <span>Somente Camadas E/T/O</span>
+                      {exportSelectedDedicatedGroupIds.includes('__STANDARD_LAYERS__') && <Check size={12} />}
+                    </button>
+
+                    {availableExportDedicatedGroups.map(grp => {
+                      const isChecked = exportSelectedDedicatedGroupIds.includes(grp.id);
+                      return (
+                        <button
+                          key={grp.id}
+                          type="button"
+                          onClick={() => handleToggleExportDedicatedGroup(grp.id)}
+                          className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            isChecked
+                              ? 'bg-teal-700 text-white shadow-sm font-black'
+                              : 'bg-white text-teal-900 hover:bg-teal-50 border border-teal-300'
+                          }`}
+                        >
+                          <span>{grp.name} ({grp.memberCount}p)</span>
+                          {isChecked && <Check size={12} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* 3. SELEÇÃO DE EMPRESAS */}
               <div className="space-y-2">
