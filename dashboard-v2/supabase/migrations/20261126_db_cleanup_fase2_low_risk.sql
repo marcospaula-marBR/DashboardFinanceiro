@@ -1,13 +1,13 @@
 -- ==============================================================================
 -- LIMPEZA FASE 2: REMOÇÃO SEGURA DE BACKUPS CONGELADOS, TABELAS VAZIAS ÓRFÃS
 --                 E VIEWS LEGADAS NÃO UTILIZADAS NO SUPABASE
--- Versão: v.02.60.36
+-- Versão: v.02.60.37
 -- Data: 2026-11-26
 -- Status: AGUARDANDO EXECUÇÃO EXPLÍCITA NO SUPABASE SQL EDITOR
 --
 -- Pré-Auditoria Executada em 2026-11-26 (Somente-Leitura via REST/OpenAPI):
 --   • Total de objetos no schema public antes da limpeza: 107 (98 tabelas + 9 views)
---   • Bloco 1 (Ativo — Baixo Risco): 31 objetos (13 backups + 11 vazias órfãs + 7 views legadas)
+--   • Bloco 1 (Ativo — Baixo Risco): 32 objetos (13 backups + 11 vazias órfãs + 8 views legadas)
 --   • Backup local em JSON gerado antes desta migração em:
 --     C:\Users\MarBrasil\.gemini\antigravity\brain\e21921fe-f240-49b8-b685-1625e60c6c18\scratch\supabase_backup_fase2_20261126\
 --   • IMPORTANTE: Este script NÃO usa CASCADE no Bloco 1 para evitar remoções silenciosas.
@@ -80,16 +80,17 @@ DROP TABLE IF EXISTS public.omie_sync_data;
 DROP TABLE IF EXISTS public.organization_members;
 
 -- ------------------------------------------------------------------------------
--- BLOCO 1C (ATIVO): 7 VIEWS SQL LEGADAS SEM CONSULTA NAS TELAS ATIVAS
+-- BLOCO 1C (ATIVO): 8 VIEWS SQL LEGADAS SEM CONSULTA NAS TELAS ATIVAS
 -- (Ordem segura de dependência; NÃO afeta o bucket Storage 'contracts')
 -- ------------------------------------------------------------------------------
-DROP VIEW IF EXISTS public.contracts_expanded;
-DROP VIEW IF EXISTS public.contracts;
-DROP VIEW IF EXISTS public.dados_csv;
-DROP VIEW IF EXISTS public.dre_mensal;
-DROP VIEW IF EXISTS public.dre_base_dashboard;
 DROP VIEW IF EXISTS public.loan_projections;
 DROP VIEW IF EXISTS public.loan_stats;
+DROP VIEW IF EXISTS public.employee_loans_summary;
+DROP VIEW IF EXISTS public.contracts;
+DROP VIEW IF EXISTS public.contracts_expanded;
+DROP VIEW IF EXISTS public.dre_mensal;
+DROP VIEW IF EXISTS public.dre_base_dashboard;
+DROP VIEW IF EXISTS public.dados_csv;
 
 -- ------------------------------------------------------------------------------
 -- BLOCO 2 (OPCIONAL / COMENTADO): TABELAS DOS MÓDULOS REMOVIDOS NA FASE 1,
