@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { extractStoragePathFromUrl } from '@/lib/storage-hygiene';
 import {
   InsurancePolicy,
   InsurancePolicyInput,
@@ -278,11 +279,24 @@ export async function deactivateInsurancePolicy(id: string): Promise<void> {
 
 /** Hard delete — use com cuidado */
 export async function deleteInsurancePolicy(id: string): Promise<void> {
+  const { data: existing } = await supabase
+    .from(TABLE)
+    .select('pdf_url, coberturas_adicionais')
+    .eq('id', id)
+    .maybeSingle();
+
   const { error } = await supabase.from(TABLE).delete().eq('id', id);
 
   if (error) {
     console.error('[InsuranceService] Erro ao excluir apólice:', error.message);
     throw error;
+  }
+
+  if (existing) {
+    const resolvedPdfUrl = enrichPolicy(existing as InsurancePolicy).pdf_url || existing.pdf_url;
+    if (resolvedPdfUrl) {
+      void removeInsurancePolicyFile(resolvedPdfUrl);
+    }
   }
 }
 
@@ -393,4 +407,24 @@ export async function uploadInsurancePolicyFile(
 
   const { data } = await supabase.storage.from('contracts').createSignedUrl(storagePath, 31536000); // 1 ano
   return data?.signedUrl || storagePath;
+}
+
+/**
+ * Remove arquivo de apólice do bucket 'contracts' (somente pasta insurances/) em modo best-effort.
+ */
+export async function removeInsurancePolicyFile(urlOrPath?: string | null): Promise<boolean> {
+  const storagePath = extractStoragePathFromUrl(urlOrPath, 'contracts');
+  if (!storagePath || !storagePath.startsWith('insurances/')) return false;
+
+  try {
+    const { error } = await supabase.storage.from('contracts').remove([storagePath]);
+    if (error) {
+      console.warn('[InsuranceService] Falha ao remover PDF de seguro do Storage:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[InsuranceService] Exceção ao remover PDF de seguro do Storage:', err);
+    return false;
+  }
 }

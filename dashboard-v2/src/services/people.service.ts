@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
+import { buildAvatarCleanupPaths, extractStoragePathFromUrl, optimizeAvatarImageFile } from '@/lib/storage-hygiene';
 import { Employee, PeopleMetadata, EntityType, RelationshipNature, PeopleAIAgent, PeopleTemporaryDelegation, PeopleRelationship, mergePeopleMetadata, inferEntityType, normalizeCompanyName, formatPjRole } from '@/types/loans';
 
 export class PeopleService {
@@ -351,21 +352,55 @@ export class PeopleService {
   }
 
   /**
+   * Remove um arquivo temporário ou substituído do bucket 'contracts' de forma segura.
+   */
+  static async removeContractStorageFile(urlOrPath: string | null | undefined): Promise<boolean> {
+    const storagePath = extractStoragePathFromUrl(urlOrPath, 'contracts');
+    if (!storagePath) return false;
+
+    try {
+      const { error } = await supabase.storage.from('contracts').remove([storagePath]);
+      if (error) {
+        console.warn('[PeopleService] Falha ao remover arquivo antigo/temporário do Storage:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('[PeopleService] Exceção ao remover arquivo do Storage:', err);
+      return false;
+    }
+  }
+
+  /**
    * Salva o upload de um arquivo para o Storage (ex: foto de perfil)
    */
-  static async uploadProfilePhoto(employeeId: string, file: File, isTestMode?: boolean): Promise<string> {
+  static async uploadProfilePhoto(
+    employeeId: string,
+    file: File,
+    isTestMode?: boolean,
+    previousPhotoUrl?: string | null
+  ): Promise<string> {
     const folder = isTestMode ? 'test' : 'production';
-    const ext = file.name.split('.').pop() || 'jpg';
-    const storagePath = `avatars/${folder}/${employeeId}.${ext}`;
-
-    // Remove versão anterior
-    await supabase.storage.from('contracts').remove([storagePath]);
+    const optimized = await optimizeAvatarImageFile(file, { maxDimension: 512, quality: 0.82 });
+    const storagePath = `avatars/${folder}/${employeeId}.${optimized.extension}`;
 
     const { error: uploadError } = await supabase.storage
       .from('contracts')
-      .upload(storagePath, file, { upsert: true, contentType: file.type });
+      .upload(storagePath, optimized.file, { upsert: true, contentType: optimized.contentType });
 
     if (uploadError) throw new Error(`Falha no upload da foto: ${uploadError.message}`);
+
+    const stalePaths = buildAvatarCleanupPaths(folder, employeeId, storagePath, previousPhotoUrl);
+    if (stalePaths.length > 0) {
+      try {
+        const { error: removeError } = await supabase.storage.from('contracts').remove(stalePaths);
+        if (removeError) {
+          console.warn('[PeopleService] Falha ao limpar avatares antigos:', removeError.message);
+        }
+      } catch (err) {
+        console.warn('[PeopleService] Exceção ao limpar avatares antigos:', err);
+      }
+    }
 
     const { data } = await supabase.storage.from('contracts').createSignedUrl(storagePath, 315360000); // 10 years
     

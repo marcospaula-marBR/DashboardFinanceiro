@@ -888,7 +888,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
     setIsSaving(true);
     try {
-      const url = await PeopleService.uploadProfilePhoto(targetId, file, isTestMode);
+      const url = await PeopleService.uploadProfilePhoto(targetId, file, isTestMode, profile.photo_url);
 
       // Atualiza apenas photo_url via updater funcional (preserva todos os campos editados)
       setProfile(prev => ({ ...prev, photo_url: url, id: targetId }));
@@ -1289,12 +1289,15 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
     setIsParsingContract(true);
     setError(null);
+    let uploadedContractUrl: string | null = null;
+    let contractUrlAttached = false;
     try {
       // 1. Upload do PDF do contrato para o Supabase Storage primeiro.
       // Se não houver ID (novo colaborador), geramos um ID temporário seguro para a pasta de upload.
       const uploadId = profile.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11));
       
       const contractUrl = await PeopleService.uploadAdditiveFile(uploadId, file, isTestMode);
+      uploadedContractUrl = contractUrl;
       const dateStr = new Date().toLocaleDateString('pt-BR');
       let markdownLink = `[Documento ${dateStr}](${contractUrl})`;
 
@@ -1365,6 +1368,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
           
           let updatedMarkdownLink = `[${docTitle} ${signDateStr}](${contractUrl})`;
 
+          contractUrlAttached = true;
           initializeMerge(existingProfile, incomingMapped, hist || [], bondsData || [], costsData || [], updatedMarkdownLink, data.signature_date || data.start_date);
         } catch (loadErr: unknown) {
           const error = loadErr as Error;
@@ -1426,6 +1430,7 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
       }
 
       // Mesclar os dados extraídos no profile
+      contractUrlAttached = true;
       setProfile(prev => {
         const next = { ...prev };
         
@@ -1558,6 +1563,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
         : 'Contrato importado e analisado por IA com sucesso! Os campos foram auto-preenchidos.'
       );
     } catch (err: unknown) {
+      if (uploadedContractUrl && !contractUrlAttached) {
+        void PeopleService.removeContractStorageFile(uploadedContractUrl);
+      }
       const error = err as Error;
       console.error(error);
       setError(error.message || 'Erro ao analisar o contrato.');
@@ -1928,10 +1936,12 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
 
     setIsParsingPayroll(true);
     setSaveCostError(null);
+    let uploadedTempPayrollUrl: string | null = null;
     try {
       // 1. Upload do PDF do holerite
       const uploadId = profile.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'temp_' + Date.now());
       const payrollUrl = await PeopleService.uploadAdditiveFile(uploadId, file, isTestMode);
+      uploadedTempPayrollUrl = payrollUrl;
 
       // 2. Chamar API de parse do holerite
       const res = await fetch('/api/people/parse-payroll', {
@@ -2013,6 +2023,9 @@ export function ProfileDrawer({ isOpen, onClose, employeeId, onDataChanged, isTe
     } catch (err: any) {
       setSaveCostError(err.message || 'Erro ao ler holerite.');
     } finally {
+      if (uploadedTempPayrollUrl) {
+        void PeopleService.removeContractStorageFile(uploadedTempPayrollUrl);
+      }
       setIsParsingPayroll(false);
     }
   };

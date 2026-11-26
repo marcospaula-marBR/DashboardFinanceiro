@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { X, AlertCircle, Loader2 } from 'lucide-react';
 import { InsurancePolicy, InsurancePolicyInput } from '@/types/insurance';
-import { uploadInsurancePolicyFile } from '@/services/insurance.service';
+import { uploadInsurancePolicyFile, removeInsurancePolicyFile } from '@/services/insurance.service';
 import styles from './seguros.module.css';
 
 interface InsuranceAddEditModalProps {
@@ -119,6 +119,9 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
     setIsSaving(true);
     setSaveError(null);
 
+    const previousPdfUrl = policy?.pdf_url || '';
+    let newlyUploadedPdfUrl: string | null = null;
+
     try {
       let finalPdfUrl = form.pdf_url;
 
@@ -127,6 +130,7 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
         const targetId = policy?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'new_' + Date.now());
         console.log('[Insurance upload] Carregando arquivo para o Supabase Storage...');
         finalPdfUrl = await uploadInsurancePolicyFile(targetId, selectedFile);
+        newlyUploadedPdfUrl = finalPdfUrl;
         console.log('[Insurance upload] Upload de arquivo realizado. URL:', finalPdfUrl);
       }
 
@@ -134,8 +138,16 @@ export function InsuranceAddEditModal({ isOpen, onClose, onSave, policy }: Insur
         ...form,
         pdf_url: finalPdfUrl,
       });
+
+      if (previousPdfUrl && previousPdfUrl !== finalPdfUrl) {
+        void removeInsurancePolicyFile(previousPdfUrl);
+      }
+
       onClose();
     } catch (err: any) {
+      if (newlyUploadedPdfUrl) {
+        void removeInsurancePolicyFile(newlyUploadedPdfUrl);
+      }
       setSaveError(err.message || 'Erro ao salvar apólice.');
     } finally {
       setIsSaving(false);

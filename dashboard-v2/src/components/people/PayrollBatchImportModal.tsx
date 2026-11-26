@@ -138,9 +138,11 @@ export function PayrollBatchImportModal({
     setStep('upload');
     setProgressText('Efetuando upload seguro da folha consolidada...');
 
+    let uploadedTempBatchUrl: string | null = null;
     try {
       const uploadId = 'batch_' + Date.now();
       const fileUrl = await PeopleService.uploadAdditiveFile(uploadId, file, isTestMode);
+      uploadedTempBatchUrl = fileUrl;
 
       setProgressText('Gemini AI processando verbas e encargos FGTS/INSS/IRRF...');
       
@@ -195,6 +197,9 @@ export function PayrollBatchImportModal({
       console.error(err);
       setError(err.message || 'Erro ao processar folha de pagamento.');
     } finally {
+      if (uploadedTempBatchUrl) {
+        void PeopleService.removeContractStorageFile(uploadedTempBatchUrl);
+      }
       setIsProcessing(false);
     }
   };
