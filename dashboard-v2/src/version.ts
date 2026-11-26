@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.60.35";
+export const APP_VERSION = "v.02.60.36";
 export const VERSION_DATE = "2026-11-26";
 export const VERSION_CHANGELOG = [
+  "v.02.60.36 - Chore: Limpeza Fase 2 com ponto de restauração (branch ponto-reversao-pre-limpeza-fase2-2026-11-26 e tag restore-pre-limpeza-fase2-v02.60.35), removendo a página Fluxo de Caixa (/fluxo-caixa, APIs /api/omie/fluxo-caixa/*, componentes e lancamentos.service.ts) e entregando script SQL auditável de limpeza de baixo risco no Supabase (supabase/migrations/20261126_db_cleanup_fase2_low_risk.sql) com guardas de segurança contra perda de dados.",
   "v.02.60.35 - Chore: Limpeza Fase 1 do portal com ponto de restauração dedicado (branch ponto-reversao-pre-limpeza-fase1-2026-11-26 e tag restore-pre-limpeza-fase1-v02.60.34), removendo páginas ocultas/legadas (/comissoes, /comissoes-v1, /comissoes-v1-backup, /loans e HTMLs legados) e os módulos de Faturamento, Recebíveis e Comissões (/faturamento, /recebiveis, gestao-integrada.html), mantendo intactos os dados no Supabase e corrigindo link quebrado em parcelamentos.html.",
   "v.02.60.34 - Chore: Remove referência residual de Co-Authored-By (First Fluke) em .agent/skills/commit/SKILL.md para manter 100% da autoria dos commits na conta oficial do projeto.",
   "v.02.60.33 - Feat: Resumo Visual por Faixa de Fator e Saldo Redistribuído por Etapa nos Grupos de Montante Específico do BPR: contadores de elegíveis por faixa (100%, 90%-99% e <90%) e totais exatos de redistribuição na Etapa 1 (<90% -> >=90%) e Etapa 2 (90%-99% -> 100%) no tipo BprDedicatedGroupSummary, motor BprService, card ao vivo e cabeçalho no Cockpit BPR, além de expansão dos testes no Bloco 23C.",

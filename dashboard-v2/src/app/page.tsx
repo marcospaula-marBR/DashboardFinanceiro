@@ -9,7 +9,6 @@ import {
   Gauge,
   Users,
   Landmark,
-  HandCoins,
   WalletCards,
   Tv,
   CheckSquare
@@ -31,7 +30,6 @@ const SATELLITES = [
   { href: "/seguros", icon: ShieldCheck, title: "Seguros", sub: "Gestão de Apólices" },
   { href: "/indicadores_v2.html", icon: Gauge, title: "Indicadores", sub: "KPIs Estratégicos" },
   { href: "/mutuos.html", icon: Landmark, title: "Mútuos & Dividendos", sub: "Transferências" },
-  { href: "/fluxo-caixa", icon: HandCoins, title: "Fluxo de Caixa", sub: "Tempo Real (Omie)" },
   { href: "/clara", icon: CreditCard, title: "Clara → Omie", sub: "Cartões & Comprovantes" },
 ];
 
