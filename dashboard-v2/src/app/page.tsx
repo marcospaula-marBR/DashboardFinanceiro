@@ -3,14 +3,10 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import { APP_VERSION } from "@/version";
 import {
-  Receipt,
   TrendingUp,
-  PieChart,
   CreditCard,
   ShieldCheck,
   Gauge,
-  FileText,
-  BadgeDollarSign,
   Users,
   Landmark,
   HandCoins,
@@ -27,8 +23,6 @@ export const metadata: Metadata = {
 const SATELLITES = [
   { href: "/minhas-atividades", icon: CheckSquare, title: "Portal da Equipe", sub: "Minhas Atividades & Notificações" },
   { href: "/lousa-operacional", icon: Tv, title: "Lousa Operacional", sub: "War Room Modo TV" },
-  { href: "/recebiveis", icon: BadgeDollarSign, title: "Recebíveis & Comissões", sub: "Unificado (Omie & Manual)" },
-  { href: "/gestao-integrada.html", icon: Receipt, title: "Gestão Integrada", sub: "Faturamento & Impostos" },
   { href: "/dre", icon: TrendingUp, title: "DRE Gerencial", sub: "Visão Financeira" },
   { href: "/dre-painel", icon: TrendingUp, title: "DRE Multivisão", sub: "Competência • Caixa • Previsão" },
   { href: "/dre-caixa", icon: WalletCards, title: "DRE-Caixa", sub: "Regime de Pagamentos" },
@@ -36,7 +30,6 @@ const SATELLITES = [
   { href: "/people", icon: Users, title: "People", sub: "Gestão Cockpit RH" },
   { href: "/seguros", icon: ShieldCheck, title: "Seguros", sub: "Gestão de Apólices" },
   { href: "/indicadores_v2.html", icon: Gauge, title: "Indicadores", sub: "KPIs Estratégicos" },
-  { href: "/faturamento", icon: FileText, title: "Faturamentos", sub: "Vínculo Omie & Fiscal" },
   { href: "/mutuos.html", icon: Landmark, title: "Mútuos & Dividendos", sub: "Transferências" },
   { href: "/fluxo-caixa", icon: HandCoins, title: "Fluxo de Caixa", sub: "Tempo Real (Omie)" },
   { href: "/clara", icon: CreditCard, title: "Clara → Omie", sub: "Cartões & Comprovantes" },
