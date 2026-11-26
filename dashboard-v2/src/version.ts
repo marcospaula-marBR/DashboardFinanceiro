@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.60.38";
+export const APP_VERSION = "v.02.60.39";
 export const VERSION_DATE = "2026-11-26";
 export const VERSION_CHANGELOG = [
+  "v.02.60.39 - Chore: Limpeza Fase 3 com ponto de restauração (branch ponto-reversao-pre-limpeza-fase3-2026-11-26 e tag restore-pre-limpeza-fase3-v02.60.38), removendo a página Indicadores (/indicadores_v2.html e script_v2.js), páginas ocultas sem vínculo ativo (/institucional, /institucional/gerador, /dre-custom, /war-room, editar-contratos.html, landing.html, login.html e dre-supabase.service.ts) e entregando script SQL auditável de remoção dos 27 objetos sem uso no Supabase (supabase/migrations/20261126_db_cleanup_fase3_unused_tables.sql).",
   "v.02.60.38 - Fix: Reordena DROP VIEW public.dados_csv antes de public.dre_mensal no script SQL da Fase 2 (20261126_db_cleanup_fase2_low_risk.sql) para eliminar erro de dependência 2BP01 sem usar CASCADE.",
   "v.02.60.37 - Fix: Corrige ordem de dependência das views no script SQL da Fase 2 (20261126_db_cleanup_fase2_low_risk.sql), incluindo public.employee_loans_summary antes de public.contracts_expanded sem uso de CASCADE.",
   "v.02.60.36 - Chore: Limpeza Fase 2 com ponto de restauração (branch ponto-reversao-pre-limpeza-fase2-2026-11-26 e tag restore-pre-limpeza-fase2-v02.60.35), removendo a página Fluxo de Caixa (/fluxo-caixa, APIs /api/omie/fluxo-caixa/*, componentes e lancamentos.service.ts) e entregando script SQL auditável de limpeza de baixo risco no Supabase (supabase/migrations/20261126_db_cleanup_fase2_low_risk.sql) com guardas de segurança contra perda de dados.",

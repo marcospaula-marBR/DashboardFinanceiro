@@ -6,7 +6,6 @@ import {
   TrendingUp,
   CreditCard,
   ShieldCheck,
-  Gauge,
   Users,
   Landmark,
   WalletCards,
@@ -28,7 +27,6 @@ const SATELLITES = [
   { href: "/parcelamentos.html", icon: CreditCard, title: "Parcelamentos", sub: "Controle de Dívidas" },
   { href: "/people", icon: Users, title: "People", sub: "Gestão Cockpit RH" },
   { href: "/seguros", icon: ShieldCheck, title: "Seguros", sub: "Gestão de Apólices" },
-  { href: "/indicadores_v2.html", icon: Gauge, title: "Indicadores", sub: "KPIs Estratégicos" },
   { href: "/mutuos.html", icon: Landmark, title: "Mútuos & Dividendos", sub: "Transferências" },
   { href: "/clara", icon: CreditCard, title: "Clara → Omie", sub: "Cartões & Comprovantes" },
 ];
