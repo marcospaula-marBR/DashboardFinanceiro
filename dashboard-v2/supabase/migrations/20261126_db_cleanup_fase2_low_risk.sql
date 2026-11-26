@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- LIMPEZA FASE 2: REMOÇÃO SEGURA DE BACKUPS CONGELADOS, TABELAS VAZIAS ÓRFÃS
 --                 E VIEWS LEGADAS NÃO UTILIZADAS NO SUPABASE
--- Versão: v.02.60.37
+-- Versão: v.02.60.38
 -- Data: 2026-11-26
 -- Status: AGUARDANDO EXECUÇÃO EXPLÍCITA NO SUPABASE SQL EDITOR
 --
@@ -88,9 +88,9 @@ DROP VIEW IF EXISTS public.loan_stats;
 DROP VIEW IF EXISTS public.employee_loans_summary;
 DROP VIEW IF EXISTS public.contracts;
 DROP VIEW IF EXISTS public.contracts_expanded;
+DROP VIEW IF EXISTS public.dados_csv;
 DROP VIEW IF EXISTS public.dre_mensal;
 DROP VIEW IF EXISTS public.dre_base_dashboard;
-DROP VIEW IF EXISTS public.dados_csv;
 
 -- ------------------------------------------------------------------------------
 -- BLOCO 2 (OPCIONAL / COMENTADO): TABELAS DOS MÓDULOS REMOVIDOS NA FASE 1,
