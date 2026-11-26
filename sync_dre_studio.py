@@ -18,8 +18,10 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta
 import html
 import os
+import re
 import sys
 import time
+import unicodedata
 import urllib.parse
 
 from dotenv import load_dotenv
@@ -62,6 +64,24 @@ def decode_html_entities(text):
     if text is None:
         return ""
     return html.unescape(str(text)).strip()
+
+
+def _normalize_text_ascii(text):
+    raw = decode_html_entities(text).lower()
+    if not raw:
+        return ""
+    return unicodedata.normalize("NFD", raw).encode("ascii", "ignore").decode("ascii").strip()
+
+
+def is_cmc_category(categoria_nome, conta_dre=None):
+    """Identifica categorias/contas de Custo Médio (CMC) para ignorá-las nos resultados."""
+    for value in (categoria_nome, conta_dre):
+        norm = _normalize_text_ascii(value)
+        if not norm:
+            continue
+        if re.search(r"\bcmc\b", norm) or "custo medio" in norm:
+            return True
+    return False
 
 
 def normalize_company_name(name):
@@ -167,6 +187,7 @@ def parse_category_record(empresa_id, empresa_nome, raw_cat):
     cod = str(raw_cat.get("codigo") or "").strip()
     if not cod:
         return None
+    desc_cat = decode_html_entities(raw_cat.get("descricao") or "")
     dados_dre = raw_cat.get("dadosDRE") if isinstance(raw_cat.get("dadosDRE"), dict) else {}
     cod_dre = str(dados_dre.get("codigoDRE") or raw_cat.get("codigo_dre") or "").strip() or None
     desc_dre = decode_html_entities(dados_dre.get("descricaoDRE") or "") or None
@@ -174,12 +195,13 @@ def parse_category_record(empresa_id, empresa_nome, raw_cat):
     nao_exibir_dre = (
         str(dados_dre.get("naoExibirDRE") or "N").strip().upper() == "S"
         or str(raw_cat.get("nao_exibir") or "N").strip().upper() == "S"
+        or is_cmc_category(desc_cat, desc_dre)
     )
     return {
         "empresa_id": empresa_id,
         "empresa_nome": empresa_nome,
         "codigo_categoria": cod,
-        "descricao_categoria": decode_html_entities(raw_cat.get("descricao") or ""),
+        "descricao_categoria": desc_cat,
         "codigo_dre": cod_dre,
         "descricao_dre": desc_dre,
         "sinal_dre": sinal_dre,
@@ -288,53 +310,138 @@ class ExtratoReconciler:
 
 
 def build_mov_enrichment_map(mov_records):
-    mov_map = {}
-    for m in mov_records:
+    acc_by_tit = {}
+    for idx, m in enumerate(mov_records):
         det = m.get("detalhes") or {}
         res = m.get("resumo") or {}
         tit = str(det.get("nCodTitulo") or "").strip()
         if not tit or tit == "0":
             continue
+
         dt_mov = parse_br_date_to_iso(
             det.get("dDtPagamento")
             or det.get("dDtCredito")
             or det.get("dDtDebito")
             or det.get("dDtPagto")
         )
-        val_mov = float(
-            res.get("nValLiquido")
-            or res.get("nValPago")
-            or det.get("nValorMovCC")
-            or det.get("nValorTitulo")
-            or 0
-        )
-        mov_cc = str(det.get("nCodMovCC") or "").strip()
-        cc_id = str(det.get("nCodCC") or "").strip()
-        c_orig = str(det.get("cOrigem") or "").upper()
-        dt_reg = parse_br_date_to_iso(det.get("dDtRegistro"))
-
         if not dt_mov:
             continue
-        if tit not in mov_map:
-            mov_map[tit] = {
+
+        mov_cc = str(det.get("nCodMovCC") or "").strip()
+        if mov_cc == "0":
+            mov_cc = ""
+        cc_id = str(det.get("nCodCC") or "").strip()
+        c_grp = str(det.get("cGrupo") or "").strip().upper()
+        c_orig = str(det.get("cOrigem") or "").strip().upper()
+        n_cod_baixa = str(det.get("nCodBaixa") or "").strip()
+        is_baixa = (c_orig in ("BAXR", "BAXP")) or (bool(n_cod_baixa) and n_cod_baixa != "0")
+        dt_reg = parse_br_date_to_iso(det.get("dDtRegistro"))
+
+        acc = acc_by_tit.get(tit)
+        if acc is None:
+            acc = {
                 "data_pagamento": dt_mov,
-                "valor_pago": val_mov,
-                "nCodMovCC": mov_cc,
+                "title_val_pago": 0.0,
+                "title_liquidado": "",
+                "title_val_aberto": 0.0,
+                "baixas": {},
+                "fallback_val": 0.0,
+                "nCodMovCCs": [],
                 "nCodCC": cc_id,
                 "cOrigem": c_orig,
                 "dDtRegistro": dt_reg,
                 "uInc": det.get("cUsInc"),
                 "dInc": parse_br_date_to_iso(det.get("dDtInc")),
             }
+            acc_by_tit[tit] = acc
         else:
-            if dt_mov > mov_map[tit]["data_pagamento"]:
-                mov_map[tit]["data_pagamento"] = dt_mov
-            if mov_cc:
-                mov_map[tit]["nCodMovCC"] = mov_cc
-            if cc_id and not mov_map[tit]["nCodCC"]:
-                mov_map[tit]["nCodCC"] = cc_id
-            if val_mov > 0 and (mov_map[tit]["valor_pago"] == 0 or c_orig in ("BAXR", "BAXP")):
-                mov_map[tit]["valor_pago"] = val_mov
+            if dt_mov > acc["data_pagamento"]:
+                acc["data_pagamento"] = dt_mov
+            if cc_id and not acc["nCodCC"]:
+                acc["nCodCC"] = cc_id
+            if dt_reg and not acc["dDtRegistro"]:
+                acc["dDtRegistro"] = dt_reg
+
+        if mov_cc and mov_cc not in acc["nCodMovCCs"]:
+            acc["nCodMovCCs"].append(mov_cc)
+
+        if is_baixa:
+            val_bax = round(
+                abs(
+                    float(
+                        res.get("nValPago")
+                        or det.get("nValorMovCC")
+                        or res.get("nValLiquido")
+                        or 0
+                    )
+                ),
+                2,
+            )
+            if n_cod_baixa and n_cod_baixa != "0":
+                b_key = f"baixa:{n_cod_baixa}"
+            elif mov_cc:
+                b_key = f"mov:{mov_cc}"
+            else:
+                b_key = f"fb:{dt_mov}:{cc_id}:{val_bax:.2f}:{idx}"
+            acc["baixas"][b_key] = {
+                "val": val_bax,
+                "dt": dt_mov,
+                "mov_cc": mov_cc,
+                "cc_id": cc_id,
+            }
+        elif c_grp in ("CONTA_A_RECEBER", "CONTA_A_PAGAR"):
+            c_liq = str(res.get("cLiquidado") or "").strip().upper()
+            if c_liq:
+                acc["title_liquidado"] = c_liq
+            if res.get("nValAberto") is not None:
+                acc["title_val_aberto"] = round(abs(float(res.get("nValAberto") or 0)), 2)
+            val_title = round(abs(float(res.get("nValPago") or 0)), 2)
+            if val_title == 0 and c_liq == "S":
+                val_title = round(abs(float(res.get("nValLiquido") or 0)), 2)
+            if val_title > acc["title_val_pago"]:
+                acc["title_val_pago"] = val_title
+        else:
+            val_fb = round(
+                abs(
+                    float(
+                        res.get("nValPago")
+                        or res.get("nValLiquido")
+                        or det.get("nValorMovCC")
+                        or det.get("nValorTitulo")
+                        or 0
+                    )
+                ),
+                2,
+            )
+            if val_fb > acc["fallback_val"]:
+                acc["fallback_val"] = val_fb
+
+    mov_map = {}
+    for tit, acc in acc_by_tit.items():
+        baixas_list = list(acc["baixas"].values())
+        baixas_sum = round(sum(b["val"] for b in baixas_list), 2)
+        if acc["title_val_pago"] > 0:
+            valor_pago = acc["title_val_pago"]
+        elif baixas_sum > 0:
+            valor_pago = baixas_sum
+        else:
+            valor_pago = acc["fallback_val"]
+
+        mov_ccs = acc["nCodMovCCs"]
+        mov_map[tit] = {
+            "data_pagamento": acc["data_pagamento"],
+            "valor_pago": round(valor_pago, 2),
+            "nCodMovCC": mov_ccs[-1] if mov_ccs else "",
+            "nCodMovCCs": mov_ccs,
+            "baixas": baixas_list,
+            "cLiquidado": acc["title_liquidado"],
+            "nValAberto": acc["title_val_aberto"],
+            "nCodCC": acc["nCodCC"],
+            "cOrigem": acc["cOrigem"],
+            "dDtRegistro": acc["dDtRegistro"],
+            "uInc": acc["uInc"],
+            "dInc": acc["dInc"],
+        }
     return mov_map
 
 
@@ -394,6 +501,7 @@ def process_cp_cr_records(
     mov_map,
     reconciler,
     cutover_iso,
+    preserve_extrato=False,
 ):
     rows = []
     sinal = 1 if tipo == "RECEBER" else -1
@@ -406,6 +514,10 @@ def process_cp_cr_records(
         cat_cod = str(r.get("codigo_categoria") or "").strip()
         cat_info = cat_map.get(cat_cod) or {}
         if is_transfer_record(cat_info, cat_cod, r.get("id_origem"), ""):
+            continue
+
+        cat_nome = cat_info.get("descricao_categoria") or decode_html_entities(r.get("descricao_categoria") or "") or None
+        if is_cmc_category(cat_nome, cat_info.get("descricao_dre")):
             continue
 
         omie_id = r.get("codigo_lancamento_omie")
@@ -421,7 +533,13 @@ def process_cp_cr_records(
             dt_pagto = m_info["data_pagamento"]
             val_pago = round(abs(float(m_info["valor_pago"] or doc_val)), 2)
             ratio = (val_pago / doc_val) if (doc_val > 0 and val_pago > 0) else 1.0
-            status_final = "RECEBIDO" if tipo == "RECEBER" else "PAGO"
+            is_partial = status in ("RECEBIDO PARCIAL", "PAGO PARCIAL") or (
+                m_info.get("cLiquidado") == "N" and float(m_info.get("nValAberto") or 0) > 0.01
+            )
+            if is_partial:
+                status_final = "RECEBIDO PARCIAL" if tipo == "RECEBER" else "PAGO PARCIAL"
+            else:
+                status_final = "RECEBIDO" if tipo == "RECEBER" else "PAGO"
             cc_id = str(r.get("id_conta_corrente") or m_info.get("nCodCC") or "").strip()
             mov_cc_id = m_info.get("nCodMovCC") or None
         else:
@@ -454,14 +572,44 @@ def process_cp_cr_records(
         proj_nome = proj_map.get(proj_cod or "", decode_html_entities(r.get("nome_projeto") or "Sem Projeto")) or "Sem Projeto"
         cc_nome = cc_map.get(cc_id) or decode_html_entities(r.get("cContaCorrente") or "") or None
 
-        cat_nome = cat_info.get("descricao_categoria") or decode_html_entities(r.get("descricao_categoria") or "") or None
-
-        if reconciler and dt_pagto:
-            conciliado, dt_conc, sit_extrato = reconciler.match(
-                cc_id, dt_pagto, cli_cod, cat_cod, val_pago, candidate_ids=[mov_cc_id, omie_id_str]
-            )
-        else:
-            conciliado, dt_conc, sit_extrato = False, None, "Sem extrato"
+        baixas = (m_info or {}).get("baixas") or []
+        if not preserve_extrato:
+            if reconciler and dt_pagto:
+                if len(baixas) > 1:
+                    conc_results = [
+                        reconciler.match(
+                            b.get("cc_id") or cc_id,
+                            b.get("dt") or dt_pagto,
+                            cli_cod,
+                            cat_cod,
+                            b.get("val") or 0,
+                            candidate_ids=[b.get("mov_cc")] if b.get("mov_cc") else None,
+                        )
+                        for b in baixas
+                    ]
+                    conc_flags = [res[0] for res in conc_results]
+                    conc_dates = [res[1] for res in conc_results if res[1]]
+                    conc_sits = [res[2] for res in conc_results]
+                    max_dt_conc = max(conc_dates) if conc_dates else None
+                    if all(conc_flags):
+                        conciliado, dt_conc, sit_extrato = True, max_dt_conc, "Conciliado"
+                    elif any(conc_flags):
+                        conciliado, dt_conc, sit_extrato = False, max_dt_conc, "Parcialmente conciliado"
+                    elif any(s == "Não conciliado" for s in conc_sits):
+                        conciliado, dt_conc, sit_extrato = False, None, "Não conciliado"
+                    else:
+                        conciliado, dt_conc, sit_extrato = False, None, "Sem extrato"
+                else:
+                    cand_ids = (
+                        [*(m_info.get("nCodMovCCs") or []), omie_id_str]
+                        if m_info
+                        else [mov_cc_id, omie_id_str]
+                    )
+                    conciliado, dt_conc, sit_extrato = reconciler.match(
+                        cc_id, dt_pagto, cli_cod, cat_cod, val_pago, candidate_ids=cand_ids
+                    )
+            else:
+                conciliado, dt_conc, sit_extrato = False, None, "Sem extrato"
 
         collapsed = _collapse_distributions(r.get("distribuicao") or [], doc_val, ratio)
         rateios_json = collapsed if len(collapsed) > 1 else None
@@ -473,6 +621,7 @@ def process_cp_cr_records(
             for k, v in {
                 "cOrigem": r.get("id_origem"),
                 "nCodMovCC": mov_cc_id,
+                "baixas_qtd": len(baixas) if len(baixas) > 1 else None,
                 "uInc": info_obj.get("uInc"),
                 "dInc": dt_inc,
             }.items()
@@ -480,50 +629,50 @@ def process_cp_cr_records(
         } or None
 
         for dist in collapsed:
-            rows.append(
-                {
-                    "empresa_id": empresa_id,
-                    "empresa_nome": empresa_nome,
-                    "omie_id": omie_id_int,
-                    "tipo_registro": tipo,
-                    "departamento_nome": dist["departamento"],
-                    "status": status_final,
-                    "valor_documento": doc_val,
-                    "valor_pago": val_pago,
-                    "valor_alocado": dist["valor"],
-                    "valor_alocado_bruto": dist["valor_bruto"],
-                    "sinal": sinal,
-                    "data_emissao": dt_emissao,
-                    "data_registro": data_registro,
-                    "data_vencimento": dt_venc,
-                    "data_previsao": dt_prev,
-                    "data_pagamento": dt_pagto,
-                    "conciliado": conciliado,
-                    "data_conciliacao": dt_conc,
-                    "situacao_extrato": sit_extrato,
-                    "categoria_codigo": cat_cod or None,
-                    "categoria_nome": cat_nome,
-                    "codigo_dre": cat_info.get("codigo_dre"),
-                    "conta_dre": cat_info.get("descricao_dre"),
-                    "sinal_dre": cat_info.get("sinal_dre"),
-                    "nao_exibir_dre": bool(cat_info.get("nao_exibir_dre", False)),
-                    "projeto_codigo": proj_cod,
-                    "projeto_nome": proj_nome,
-                    "cliente_fornecedor_codigo": cli_cod,
-                    "cliente_fornecedor": cli_nome,
-                    "cnpj_cpf": cnpj_cpf,
-                    "conta_corrente_id": cc_id or None,
-                    "conta_corrente_nome": cc_nome,
-                    "numero_documento": decode_html_entities(r.get("numero_documento") or r.get("numero_documento_fiscal") or "") or None,
-                    "numero_parcela": decode_html_entities(r.get("numero_parcela") or "") or None,
-                    "chave_nfe": r.get("chave_nfe") or None,
-                    "contrato_omie": decode_html_entities(r.get("cNumeroContrato") or r.get("numero_pedido") or "") or None,
-                    "observacao": decode_html_entities(r.get("observacao") or "") or None,
-                    "impostos_retidos": impostos,
-                    "rateios": rateios_json,
-                    "raw_meta": raw_meta,
-                }
-            )
+            row_dict = {
+                "empresa_id": empresa_id,
+                "empresa_nome": empresa_nome,
+                "omie_id": omie_id_int,
+                "tipo_registro": tipo,
+                "departamento_nome": dist["departamento"],
+                "status": status_final,
+                "valor_documento": doc_val,
+                "valor_pago": val_pago,
+                "valor_alocado": dist["valor"],
+                "valor_alocado_bruto": dist["valor_bruto"],
+                "sinal": sinal,
+                "data_emissao": dt_emissao,
+                "data_registro": data_registro,
+                "data_vencimento": dt_venc,
+                "data_previsao": dt_prev,
+                "data_pagamento": dt_pagto,
+                "categoria_codigo": cat_cod or None,
+                "categoria_nome": cat_nome,
+                "codigo_dre": cat_info.get("codigo_dre"),
+                "conta_dre": cat_info.get("descricao_dre"),
+                "sinal_dre": cat_info.get("sinal_dre"),
+                "nao_exibir_dre": bool(cat_info.get("nao_exibir_dre", False)),
+                "projeto_codigo": proj_cod,
+                "projeto_nome": proj_nome,
+                "cliente_fornecedor_codigo": cli_cod,
+                "cliente_fornecedor": cli_nome,
+                "cnpj_cpf": cnpj_cpf,
+                "conta_corrente_id": cc_id or None,
+                "conta_corrente_nome": cc_nome,
+                "numero_documento": decode_html_entities(r.get("numero_documento") or r.get("numero_documento_fiscal") or "") or None,
+                "numero_parcela": decode_html_entities(r.get("numero_parcela") or "") or None,
+                "chave_nfe": r.get("chave_nfe") or None,
+                "contrato_omie": decode_html_entities(r.get("cNumeroContrato") or r.get("numero_pedido") or "") or None,
+                "observacao": decode_html_entities(r.get("observacao") or "") or None,
+                "impostos_retidos": impostos,
+                "rateios": rateios_json,
+                "raw_meta": raw_meta,
+            }
+            if not preserve_extrato:
+                row_dict["conciliado"] = conciliado
+                row_dict["data_conciliacao"] = dt_conc
+                row_dict["situacao_extrato"] = sit_extrato
+            rows.append(row_dict)
     return rows
 
 
@@ -538,6 +687,7 @@ def process_direct_cc_movements(
     forn_map,
     reconciler,
     cutover_iso,
+    preserve_extrato=False,
 ):
     rows_by_key = {}
 
@@ -566,6 +716,10 @@ def process_direct_cc_movements(
         cat_info = cat_map.get(cat_cod) or {}
         c_orig = str(det.get("cOrigem") or "").strip().upper()
         if is_transfer_record(cat_info, cat_cod, c_orig, c_grp):
+            continue
+
+        cat_nome = cat_info.get("descricao_categoria") or decode_html_entities(det.get("cDesCateg") or "") or None
+        if is_cmc_category(cat_nome, cat_info.get("descricao_dre")):
             continue
 
         c_nat = str(det.get("cNatureza") or "").strip().upper()
@@ -618,14 +772,14 @@ def process_direct_cc_movements(
 
         proj_cod = str(det.get("cCodProjeto") or det.get("nCodProjeto") or "").strip() or None
         proj_nome = proj_map.get(proj_cod or "", "Sem Projeto") or "Sem Projeto"
-        cat_nome = cat_info.get("descricao_categoria") or decode_html_entities(det.get("cDesCateg") or "") or None
 
-        if reconciler and (dt_pagto or n_cod_mov):
-            conciliado, dt_conc, sit_extrato = reconciler.match(
-                cc_id, dt_pagto, cli_cod, cat_cod, val, candidate_ids=[raw_omie_id]
-            )
-        else:
-            conciliado, dt_conc, sit_extrato = False, None, "Sem extrato"
+        if not preserve_extrato:
+            if reconciler and (dt_pagto or n_cod_mov):
+                conciliado, dt_conc, sit_extrato = reconciler.match(
+                    cc_id, dt_pagto, cli_cod, cat_cod, val, candidate_ids=[raw_omie_id]
+                )
+            else:
+                conciliado, dt_conc, sit_extrato = False, None, "Sem extrato"
 
         raw_meta = {
             k: v
@@ -640,7 +794,7 @@ def process_direct_cc_movements(
         } or None
 
         key = (empresa_id, "MOVIMENTO_CC", omie_id_int, "Principal")
-        rows_by_key[key] = {
+        row_dict = {
             "empresa_id": empresa_id,
             "empresa_nome": empresa_nome,
             "omie_id": omie_id_int,
@@ -657,9 +811,6 @@ def process_direct_cc_movements(
             "data_vencimento": dt_venc,
             "data_previsao": dt_pagto,
             "data_pagamento": dt_pagto,
-            "conciliado": conciliado,
-            "data_conciliacao": dt_conc,
-            "situacao_extrato": sit_extrato,
             "categoria_codigo": cat_cod or None,
             "categoria_nome": cat_nome,
             "codigo_dre": cat_info.get("codigo_dre"),
@@ -682,6 +833,11 @@ def process_direct_cc_movements(
             "rateios": None,
             "raw_meta": raw_meta,
         }
+        if not preserve_extrato:
+            row_dict["conciliado"] = conciliado
+            row_dict["data_conciliacao"] = dt_conc
+            row_dict["situacao_extrato"] = sit_extrato
+        rows_by_key[key] = row_dict
 
     return list(rows_by_key.values())
 
@@ -701,22 +857,28 @@ class OmieStudioClient:
             "app_secret": self.app_secret,
             "param": [param],
         }
-        for attempt in range(4):
+        for attempt in range(6):
             try:
                 resp = requests.post(url, json=payload, timeout=45)
                 if resp.status_code == 200:
                     return resp.json()
-                if resp.status_code == 429:
-                    time.sleep(2 * (attempt + 1))
+                body_txt = resp.text or ""
+                if resp.status_code == 500 and (
+                    "Client-5113" in body_txt
+                    or "Não existem registros" in body_txt
+                    or "Nao existem registros" in body_txt
+                ):
+                    return {}
+                if resp.status_code in (429, 500, 502, 503, 504):
+                    log(f"  [API {resp.status_code} retry {attempt + 1}/6] {call}: {body_txt[:160]}")
+                    time.sleep(min(15.0, 2.5 * (attempt + 1)))
                     continue
-                if resp.status_code == 500 and "SOAP-ERROR" in resp.text:
-                    time.sleep(1.5)
-                    continue
-                log(f"  [API {resp.status_code}] {call}: {resp.text[:200]}")
+                log(f"  [API {resp.status_code}] {call}: {body_txt[:200]}")
                 return {}
             except Exception as e:
-                log(f"  [Conexão] {call}: {e}")
-                time.sleep(1.5 * (attempt + 1))
+                log(f"  [Conexão retry {attempt + 1}/6] {call}: {e}")
+                time.sleep(min(15.0, 2.5 * (attempt + 1)))
+        log(f"  [ERRO] {call}: esgotadas 6 tentativas.")
         return {}
 
     def fetch_categories(self):
@@ -955,21 +1117,22 @@ def sync_company(app, days=None, skip_extrato=False, categories_only=False, dry_
     known_titles = {str(k) for k in cp_by_id.keys()} | {str(k) for k in cr_by_id.keys()} | set(mov_map.keys())
     log(f"  Bruto Omie: CP={len(cp_by_id)}, CR={len(cr_by_id)}, Movs={len(movs)}")
 
+    preserve_extrato = bool(skip_extrato)
     rows_cp = process_cp_cr_records(
-        emp_id, name, list(cp_by_id.values()), "PAGAR", cat_map, cc_map, proj_map, forn_map, mov_map, reconciler, cutover_iso
+        emp_id, name, list(cp_by_id.values()), "PAGAR", cat_map, cc_map, proj_map, forn_map, mov_map, reconciler, cutover_iso, preserve_extrato=preserve_extrato
     )
     rows_cr = process_cp_cr_records(
-        emp_id, name, list(cr_by_id.values()), "RECEBER", cat_map, cc_map, proj_map, forn_map, mov_map, reconciler, cutover_iso
+        emp_id, name, list(cr_by_id.values()), "RECEBER", cat_map, cc_map, proj_map, forn_map, mov_map, reconciler, cutover_iso, preserve_extrato=preserve_extrato
     )
     rows_cc = process_direct_cc_movements(
-        emp_id, name, movs, known_titles, cat_map, cc_map, proj_map, forn_map, reconciler, cutover_iso
+        emp_id, name, movs, known_titles, cat_map, cc_map, proj_map, forn_map, reconciler, cutover_iso, preserve_extrato=preserve_extrato
     )
 
     all_rows = rows_cp + rows_cr + rows_cc
-    conc_count = sum(1 for r in all_rows if r["conciliado"])
+    conc_info = "preservados (--skip-extrato)" if preserve_extrato else str(sum(1 for r in all_rows if r.get("conciliado")))
     log(
         f"  Processados: CP={len(rows_cp)}, CR={len(rows_cr)}, MOVIMENTO_CC={len(rows_cc)} "
-        f"| Total={len(all_rows)} | Conciliados={conc_count}"
+        f"| Total={len(all_rows)} | Conciliados={conc_info}"
     )
 
     if dry_run:

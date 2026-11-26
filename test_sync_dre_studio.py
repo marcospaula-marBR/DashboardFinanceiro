@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 import sync_dre_studio as sds
 
@@ -291,6 +292,367 @@ class TestSyncDreStudio(unittest.TestCase):
         self.assertEqual(row["valor_pago"], 34000.0)
         self.assertEqual(row["conta_corrente_nome"], "Bradesco - G2")
         self.assertEqual(row["conta_dre"], "Receita Bruta de Vendas")
+
+    def test_partial_settlements_title_summary_and_multiple_baixas(self):
+        cat_map = {
+            "1.01.02": {
+                "codigo_categoria": "1.01.02",
+                "descricao_categoria": "Clientes - Serviços B2G",
+                "codigo_dre": "1.01.01",
+                "descricao_dre": "Receita Bruta de Vendas",
+                "sinal_dre": "+",
+                "nao_exibir_dre": False,
+                "transferencia": False,
+            }
+        }
+        movs = [
+            {
+                "detalhes": {
+                    "nCodTitulo": 12299705830,
+                    "nCodCC": 7662736722,
+                    "cGrupo": "CONTA_A_RECEBER",
+                    "cOrigem": "VENR",
+                    "dDtPagamento": "11/09/2026",
+                    "dDtRegistro": "30/07/2026",
+                    "nValorTitulo": 512218.74,
+                },
+                "resumo": {"cLiquidado": "S", "nValLiquido": 472265.68, "nValPago": 472265.68, "nValAberto": 0},
+            },
+            {
+                "detalhes": {
+                    "nCodTitulo": 12299705830,
+                    "nCodCC": 7662736722,
+                    "nCodMovCC": 12330660979,
+                    "nCodBaixa": 12330660981,
+                    "cGrupo": "CONTA_CORRENTE_REC",
+                    "cOrigem": "BAXR",
+                    "dDtPagamento": "11/09/2026",
+                },
+                "resumo": {"nValPago": 216156.31},
+            },
+            {
+                "detalhes": {
+                    "nCodTitulo": 12299705830,
+                    "nCodCC": 7662736722,
+                    "nCodMovCC": 12330661009,
+                    "nCodBaixa": 12330661011,
+                    "cGrupo": "CONTA_CORRENTE_REC",
+                    "cOrigem": "BAXR",
+                    "dDtPagamento": "11/09/2026",
+                },
+                "resumo": {"nValPago": 256109.37},
+            },
+        ]
+        mov_map = sds.build_mov_enrichment_map(movs)
+        reconciler = sds.ExtratoReconciler(
+            [
+                {
+                    "nCodCC": 7662736722,
+                    "nCodLancamento": 12330660979,
+                    "cSituacao": "Conciliado",
+                    "dDataConciliacao": "12/09/2026",
+                    "dDataLancamento": "11/09/2026",
+                    "nCodCliente": 10,
+                    "cCodCategoria": "1.01.02",
+                    "nValorDocumento": 216156.31,
+                },
+                {
+                    "nCodCC": 7662736722,
+                    "nCodLancamento": 12330661009,
+                    "cSituacao": "Conciliado",
+                    "dDataConciliacao": "13/09/2026",
+                    "dDataLancamento": "11/09/2026",
+                    "nCodCliente": 10,
+                    "cCodCategoria": "1.01.02",
+                    "nValorDocumento": 256109.37,
+                },
+            ]
+        )
+        records = [
+            {
+                "codigo_lancamento_omie": 12299705830,
+                "status_titulo": "RECEBIDO",
+                "codigo_categoria": "1.01.02",
+                "codigo_cliente_fornecedor": 10,
+                "id_conta_corrente": 7662736722,
+                "valor_documento": 512218.74,
+                "valor_iss": 15366.56,
+                "valor_ir": 24586.50,
+                "data_registro": "30/07/2026",
+                "data_vencimento": "30/08/2026",
+            }
+        ]
+        out = sds.process_cp_cr_records(
+            "8w7sxfya",
+            "Mar Brasil",
+            records,
+            "RECEBER",
+            cat_map,
+            {"7662736722": "Bradesco"},
+            {},
+            {"10": {"nome": "PREF SANTOS"}},
+            mov_map,
+            reconciler,
+            "2025-06-01",
+        )
+        self.assertEqual(len(out), 1)
+        row = out[0]
+        self.assertEqual(row["valor_pago"], 472265.68)
+        self.assertEqual(row["valor_alocado"], 472265.68)
+        self.assertEqual(row["valor_alocado_bruto"], 512218.74)
+        self.assertEqual(row["raw_meta"]["baixas_qtd"], 2)
+        self.assertTrue(row["conciliado"])
+        self.assertEqual(row["data_conciliacao"], "2026-09-13")
+        self.assertEqual(row["situacao_extrato"], "Conciliado")
+
+    def test_partial_settlements_baixas_only_without_title_summary(self):
+        movs = [
+            {
+                "detalhes": {
+                    "nCodTitulo": 12250967145,
+                    "nCodCC": 7662736722,
+                    "nCodMovCC": 101,
+                    "nCodBaixa": 201,
+                    "cGrupo": "CONTA_CORRENTE_PAG",
+                    "cOrigem": "BAXP",
+                    "dDtPagamento": "28/05/2026",
+                },
+                "resumo": {"nValPago": 10560.00},
+            },
+            {
+                "detalhes": {
+                    "nCodTitulo": 12250967145,
+                    "nCodCC": 7662736722,
+                    "nCodMovCC": 102,
+                    "nCodBaixa": 202,
+                    "cGrupo": "CONTA_CORRENTE_PAG",
+                    "cOrigem": "BAXP",
+                    "dDtPagamento": "29/05/2026",
+                },
+                "resumo": {"nValPago": 4990.00},
+            },
+            # Duplicata com mesmo nCodBaixa nao deve somar duas vezes
+            {
+                "detalhes": {
+                    "nCodTitulo": 12250967145,
+                    "nCodCC": 7662736722,
+                    "nCodMovCC": 101,
+                    "nCodBaixa": 201,
+                    "cGrupo": "CONTA_CORRENTE_PAG",
+                    "cOrigem": "BAXP",
+                    "dDtPagamento": "28/05/2026",
+                },
+                "resumo": {"nValPago": 10560.00},
+            },
+        ]
+        mov_map = sds.build_mov_enrichment_map(movs)
+        self.assertEqual(mov_map["12250967145"]["valor_pago"], 15550.00)
+        self.assertEqual(mov_map["12250967145"]["data_pagamento"], "2026-05-29")
+        self.assertEqual(len(mov_map["12250967145"]["baixas"]), 2)
+
+    def test_partial_unsettled_status_uses_val_pago_not_val_liquido(self):
+        cat_map = {
+            "2.01.01": {
+                "codigo_categoria": "2.01.01",
+                "descricao_categoria": "Credenciado Operacional",
+                "codigo_dre": "1.21.02",
+                "descricao_dre": "Custo dos Serviços Prestados",
+                "sinal_dre": "-",
+                "nao_exibir_dre": False,
+                "transferencia": False,
+            }
+        }
+        movs = [
+            {
+                "detalhes": {
+                    "nCodTitulo": 3001,
+                    "cGrupo": "CONTA_A_PAGAR",
+                    "cOrigem": "MANP",
+                    "dDtPagamento": "10/08/2026",
+                    "nValorTitulo": 1000.0,
+                },
+                "resumo": {"cLiquidado": "N", "nValAberto": 500.0, "nValPago": 500.0, "nValLiquido": 1000.0},
+            }
+        ]
+        mov_map = sds.build_mov_enrichment_map(movs)
+        records = [
+            {
+                "codigo_lancamento_omie": 3001,
+                "status_titulo": "PAGO PARCIAL",
+                "codigo_categoria": "2.01.01",
+                "valor_documento": 1000.0,
+                "data_entrada": "01/08/2026",
+                "data_vencimento": "10/08/2026",
+            }
+        ]
+        out = sds.process_cp_cr_records(
+            "8w7sxfya", "Mar Brasil", records, "PAGAR", cat_map, {}, {}, {}, mov_map, None, "2025-06-01"
+        )
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["valor_pago"], 500.0)
+        self.assertEqual(out[0]["valor_alocado"], 500.0)
+        self.assertEqual(out[0]["status"], "PAGO PARCIAL")
+
+    def test_cmc_category_is_ignored_in_categories_and_transactions(self):
+        self.assertTrue(sds.is_cmc_category("Custo Médio (CMC) das Vendas"))
+        self.assertTrue(sds.is_cmc_category("CMC"))
+        self.assertFalse(sds.is_cmc_category("Credenciado Operacional"))
+
+        parsed = sds.parse_category_record(
+            "8w7sxfya",
+            "Mar Brasil",
+            {
+                "codigo": "2.01.99",
+                "descricao": "Custo Médio (CMC) das Vendas",
+                "dadosDRE": {"codigoDRE": "1.21.01", "descricaoDRE": "CMV", "naoExibirDRE": "N"},
+            },
+        )
+        self.assertTrue(parsed["nao_exibir_dre"])
+
+        cat_map = {"2.01.99": parsed}
+        out_cp = sds.process_cp_cr_records(
+            "8w7sxfya",
+            "Mar Brasil",
+            [
+                {
+                    "codigo_lancamento_omie": 91001,
+                    "status_titulo": "PAGO",
+                    "codigo_categoria": "2.01.99",
+                    "valor_documento": 55000.0,
+                    "data_entrada": "15/09/2026",
+                }
+            ],
+            "PAGAR",
+            cat_map,
+            {},
+            {},
+            {},
+            {},
+            None,
+            "2025-06-01",
+        )
+        out_cc = sds.process_direct_cc_movements(
+            "8w7sxfya",
+            "Mar Brasil",
+            [
+                {
+                    "detalhes": {
+                        "nCodTitulo": 0,
+                        "nCodMovCC": 92001,
+                        "cGrupo": "CONTA_CORRENTE_PAG",
+                        "cNatureza": "P",
+                        "cCodCateg": "2.01.99",
+                        "nValorMovCC": 1500.0,
+                        "dDtRegistro": "15/09/2026",
+                        "dDtPagamento": "15/09/2026",
+                    }
+                }
+            ],
+            known_titles=set(),
+            cat_map=cat_map,
+            cc_map={},
+            proj_map={},
+            forn_map={},
+            reconciler=None,
+            cutover_iso="2025-06-01",
+        )
+        self.assertEqual(out_cp, [])
+        self.assertEqual(out_cc, [])
+
+    def test_preserve_extrato_omits_reconciliation_columns(self):
+        cat_map = {
+            "2.01.01": {
+                "codigo_categoria": "2.01.01",
+                "descricao_categoria": "Credenciado Operacional",
+                "codigo_dre": "1.21.02",
+                "descricao_dre": "Custo dos Serviços Prestados",
+                "sinal_dre": "-",
+                "nao_exibir_dre": False,
+                "transferencia": False,
+            }
+        }
+        out_cp = sds.process_cp_cr_records(
+            "8w7sxfya",
+            "Mar Brasil",
+            [
+                {
+                    "codigo_lancamento_omie": 5001,
+                    "status_titulo": "PAGO",
+                    "codigo_categoria": "2.01.01",
+                    "valor_documento": 100.0,
+                    "data_entrada": "10/08/2026",
+                }
+            ],
+            "PAGAR",
+            cat_map,
+            {},
+            {},
+            {},
+            {},
+            None,
+            "2025-06-01",
+            preserve_extrato=True,
+        )
+        out_cc = sds.process_direct_cc_movements(
+            "8w7sxfya",
+            "Mar Brasil",
+            [
+                {
+                    "detalhes": {
+                        "nCodTitulo": 0,
+                        "nCodMovCC": 5002,
+                        "cGrupo": "CONTA_CORRENTE_PAG",
+                        "cNatureza": "P",
+                        "cCodCateg": "2.01.01",
+                        "nValorMovCC": 200.0,
+                        "dDtRegistro": "10/08/2026",
+                        "dDtPagamento": "10/08/2026",
+                    }
+                }
+            ],
+            known_titles=set(),
+            cat_map=cat_map,
+            cc_map={},
+            proj_map={},
+            forn_map={},
+            reconciler=None,
+            cutover_iso="2025-06-01",
+            preserve_extrato=True,
+        )
+        for row in (out_cp[0], out_cc[0]):
+            self.assertNotIn("conciliado", row)
+            self.assertNotIn("data_conciliacao", row)
+            self.assertNotIn("situacao_extrato", row)
+
+    def test_call_api_retries_client_8020_and_stops_on_5113(self):
+        cli = sds.OmieStudioClient("k", "s", "Mar Brasil", "8w7sxfya", "2025-06-01")
+
+        resp_8020 = mock.Mock(
+            status_code=500,
+            text='{"faultstring":"ERROR: Já existe uma requisição desse método sendo executada.","faultcode":"SOAP-ENV:Client-8020"}',
+        )
+        resp_ok = mock.Mock(status_code=200, text='{"ok": true}')
+        resp_ok.json.return_value = {"ok": True}
+
+        with mock.patch("sync_dre_studio.requests.post", side_effect=[resp_8020, resp_ok]) as post_mock, mock.patch(
+            "sync_dre_studio.time.sleep"
+        ) as sleep_mock:
+            out = cli.call_api(sds.URL_MOV, "ListarMovimentos", {"nPagina": 1})
+        self.assertEqual(out, {"ok": True})
+        self.assertEqual(post_mock.call_count, 2)
+        self.assertEqual(sleep_mock.call_count, 1)
+
+        resp_5113 = mock.Mock(
+            status_code=500,
+            text='{"faultstring":"Não existem registros para a página solicitada","faultcode":"SOAP-ENV:Client-5113"}',
+        )
+        with mock.patch("sync_dre_studio.requests.post", side_effect=[resp_5113]) as post_mock2, mock.patch(
+            "sync_dre_studio.time.sleep"
+        ) as sleep_mock2:
+            out2 = cli.call_api(sds.URL_MOV, "ListarMovimentos", {"nPagina": 999})
+        self.assertEqual(out2, {})
+        self.assertEqual(post_mock2.call_count, 1)
+        self.assertEqual(sleep_mock2.call_count, 0)
 
 
 if __name__ == "__main__":
