@@ -1,6 +1,7 @@
-export const APP_VERSION = "v.02.60.39";
+export const APP_VERSION = "v.02.60.40";
 export const VERSION_DATE = "2026-11-26";
 export const VERSION_CHANGELOG = [
+  "v.02.60.40 - Feat: Unificação e Otimização do Pipeline Omie -> Supabase (sync_omie_unified_v4.py, .github/workflows/omie_sync.yml, sincronizar_omie.ps1): integração da persistência de dimensões ativas (omie_dim_categorias, omie_dim_projetos e omie_dim_fornecedores) no sincronizador unificado de omie_financas_unificado, fallback compatível de secrets, flags --dimensions-only e --days, suíte unitária test_sync_omie_unified.py e script SQL auditável da Fase 4 (20261126_db_cleanup_fase4_omie_legacy.sql) para remoção das 7 tabelas legadas (~235k linhas).",
   "v.02.60.39 - Chore: Limpeza Fase 3 com ponto de restauração (branch ponto-reversao-pre-limpeza-fase3-2026-11-26 e tag restore-pre-limpeza-fase3-v02.60.38), removendo a página Indicadores (/indicadores_v2.html e script_v2.js), páginas ocultas sem vínculo ativo (/institucional, /institucional/gerador, /dre-custom, /war-room, editar-contratos.html, landing.html, login.html e dre-supabase.service.ts) e entregando script SQL auditável de remoção dos 27 objetos sem uso no Supabase (supabase/migrations/20261126_db_cleanup_fase3_unused_tables.sql).",
   "v.02.60.38 - Fix: Reordena DROP VIEW public.dados_csv antes de public.dre_mensal no script SQL da Fase 2 (20261126_db_cleanup_fase2_low_risk.sql) para eliminar erro de dependência 2BP01 sem usar CASCADE.",
   "v.02.60.37 - Fix: Corrige ordem de dependência das views no script SQL da Fase 2 (20261126_db_cleanup_fase2_low_risk.sql), incluindo public.employee_loans_summary antes de public.contracts_expanded sem uso de CASCADE.",

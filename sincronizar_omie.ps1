@@ -1,8 +1,8 @@
-# Sincronizador Atômico Omie -> Supabase
-# v29.4 - Mar Brasil / DZM
+# Sincronizador Unificado Omie -> Supabase
+# v31.0 - Mar Brasil / DZM / G2 / Conectius
 
-Write-Host "--- Sincronizador Omie Dashboard ---" -ForegroundColor Cyan
-Write-Host "Este script irá carregar os dados financeiros para o banco de dados." -ForegroundColor Gray
+Write-Host "--- Sincronizador Unificado Omie Dashboard ---" -ForegroundColor Cyan
+Write-Host "Este script sincronizará dimensões (categorias, projetos, fornecedores) e omie_financas_unificado." -ForegroundColor Gray
 
 $inputDate = Read-Host "`nInforme a data de início (DD/MM/AAAA) [01/06/2025]"
 if ($inputDate -eq "") { $inputDate = "01/06/2025" }
@@ -15,8 +15,8 @@ if ($parsed -lt $cutoff) {
     $inputDate = "01/06/2025"
 }
 
-Write-Host "`n[1/1] Iniciando sincronização completa a partir de $inputDate..." -ForegroundColor Yellow
-python omie_supabase_ingest.py --modo registro --de $inputDate --empresa all --verbose --persist-supabase --include-movimentos-saida
+Write-Host "`n[1/1] Iniciando sincronização unificada a partir de $inputDate..." -ForegroundColor Yellow
+python sync_omie_unified_v4.py --start-date $inputDate --empresa all
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "`n[OK] Sincronização concluída com sucesso!" -ForegroundColor Green
