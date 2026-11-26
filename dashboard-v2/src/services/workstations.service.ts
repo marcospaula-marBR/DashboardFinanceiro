@@ -162,13 +162,14 @@ export class WorkstationsService {
     try {
       const { data } = await supabase
         .from('employees')
-        .select('metadata')
+        .select('workstations:metadata->workstations')
         .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
         .maybeSingle();
 
-      if (data?.metadata?.workstations && Array.isArray(data.metadata.workstations) && data.metadata.workstations.length > 0) {
-        this.saveWorkstations(data.metadata.workstations);
-        return data.metadata.workstations;
+      const remoteWorkstations = (data as any)?.workstations;
+      if (Array.isArray(remoteWorkstations) && remoteWorkstations.length > 0) {
+        this.saveWorkstations(remoteWorkstations);
+        return remoteWorkstations;
       }
     } catch (e) {
       console.warn('Aviso ao carregar postos de trabalho do Supabase:', e);
@@ -293,13 +294,14 @@ export class CostCentersService {
     try {
       const { data } = await supabase
         .from('employees')
-        .select('metadata')
+        .select('cost_centers:metadata->cost_centers')
         .eq('full_name', '__SYSTEM_GLOBAL_CONFIG__')
         .maybeSingle();
 
-      if (data?.metadata?.cost_centers && Array.isArray(data.metadata.cost_centers)) {
-        this.saveLocal(data.metadata.cost_centers);
-        return data.metadata.cost_centers;
+      const remoteCostCenters = (data as any)?.cost_centers;
+      if (Array.isArray(remoteCostCenters)) {
+        this.saveLocal(remoteCostCenters);
+        return remoteCostCenters;
       }
     } catch (e) {
       console.warn('[CostCentersService] Aviso ao carregar centros de custo:', e);

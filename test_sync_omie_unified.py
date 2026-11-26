@@ -227,6 +227,57 @@ class TestSyncOmieUnified(unittest.TestCase):
         self.assertEqual(mod.compute_start_date(days_arg=30, today_dt=fixed_now), "27/10/2026")
         self.assertEqual(mod.compute_start_date(days_arg=2000, today_dt=fixed_now), "01/06/2025")
 
+    def test_compact_raw_data_preserves_required_and_strips_bloat(self):
+        self.assertEqual(mod.compact_raw_data(None), {})
+        self.assertEqual(mod.compact_raw_data({}), {})
+
+        sample_raw = {
+            "codigo_lancamento_omie": 12345,
+            "status_titulo": "PAGO",
+            "id_conta_corrente": 999,
+            "observacao": "Pagamento PJ",
+            "valor_documento": 2500.0,
+            "valor_ir": 0.0,
+            "cnab_integracao_bancaria": {"huge": "blob", "banco": "001"},
+            "boleto": {"cGerado": "N", "nNossoNum": "123"},
+            "categorias": [{"cCodCateg": "2.01", "nVal": 2500}],
+            "distribuicao": [{"cDesDep": "Operacional", "nValDep": 2500}],
+            "info": {"uInc": "API", "dInc": "2026-11-01", "hInc": "10:00:00"},
+            "detalhes": {
+                "nCodTitulo": 12345,
+                "cCodCateg": "2.01",
+                "cCPFCNPJCliente": "12345678000199",
+                "nCodCC": 999,
+                "cExtraNaoUsado": "remover",
+                "nValorIR": 0,
+            },
+        }
+        compact = mod.compact_raw_data(sample_raw)
+        self.assertEqual(compact["codigo_lancamento_omie"], 12345)
+        self.assertEqual(compact["id_conta_corrente"], 999)
+        self.assertNotIn("cnab_integracao_bancaria", compact)
+        self.assertNotIn("boleto", compact)
+        self.assertNotIn("categorias", compact)
+        # Single-item distribuicao is omitted (valor_alocado already carries it)
+        self.assertNotIn("distribuicao", compact)
+        self.assertEqual(compact["info"], {"uInc": "API", "dInc": "2026-11-01"})
+        self.assertEqual(compact["detalhes"]["cCPFCNPJCliente"], "12345678000199")
+        self.assertNotIn("cExtraNaoUsado", compact["detalhes"])
+
+        # Multi-department distribuicao is preserved compactly
+        sample_multi = {
+            "codigo_lancamento_omie": 99,
+            "distribuicao": [
+                {"cDesDep": "Adm", "nValDep": 100, "cCodDep": "1"},
+                {"cDesDep": "Ops", "nValDep": 200, "cCodDep": "2"},
+            ],
+        }
+        compact_multi = mod.compact_raw_data(sample_multi)
+        self.assertEqual(
+            compact_multi["distribuicao"],
+            [{"cDesDep": "Adm", "nValDep": 100}, {"cDesDep": "Ops", "nValDep": 200}],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

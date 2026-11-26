@@ -159,12 +159,13 @@ export class SystemsCatalogService {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select('metadata')
+        .select('systems_catalog:metadata->systems_catalog')
         .eq('full_name', GLOBAL_CONFIG_NAME)
         .maybeSingle();
 
-      if (data?.metadata?.systems_catalog && Array.isArray(data.metadata.systems_catalog) && data.metadata.systems_catalog.length > 0) {
-        const remoteSystems = data.metadata.systems_catalog as SystemItem[];
+      const remoteSystemsRaw = (data as any)?.systems_catalog;
+      if (!error && Array.isArray(remoteSystemsRaw) && remoteSystemsRaw.length > 0) {
+        const remoteSystems = remoteSystemsRaw as SystemItem[];
         this.cachedSystems = remoteSystems;
         this.saveLocalCache(remoteSystems);
         return remoteSystems;

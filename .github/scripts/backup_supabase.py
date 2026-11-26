@@ -146,6 +146,7 @@ def main():
     parser.add_argument("--key", default=os.environ.get("SUPABASE_SERVICE_KEY"), help="Service Role Key do Supabase")
     parser.add_argument("--output-dir", default=".", help="Diretório onde o arquivo final será salvo")
     parser.add_argument("--workers", type=int, default=6, help="Número de threads simultâneas para download")
+    parser.add_argument("--exclude-tables", default="", help="Lista de tabelas separadas por vírgula a excluir do backup")
     args = parser.parse_args()
 
     supabase_url = args.url
@@ -159,8 +160,10 @@ def main():
     start_time = time.time()
 
     # 1. Descoberta de tabelas
-    tables = discover_tables(supabase_url, service_key)
-    print(f"📋 Total de tabelas/recursos descobertos: {len(tables)}")
+    discovered_tables = discover_tables(supabase_url, service_key)
+    excluded_set = {t.strip() for t in (args.exclude_tables or "").split(",") if t.strip()}
+    tables = [t for t in discovered_tables if t not in excluded_set]
+    print(f"📋 Tabelas descobertas: {len(discovered_tables)} | Excluídas por filtro: {len(discovered_tables) - len(tables)} | No backup: {len(tables)}")
 
     staging_dir = Path("supabase_backup_staging")
     if staging_dir.exists():
@@ -175,6 +178,7 @@ def main():
         "timestamp": datetime.now().isoformat(),
         "supabase_url": supabase_url,
         "tables_count": len(tables),
+        "excluded_tables": sorted(excluded_set),
         "tables": {},
         "total_records": 0,
         "errors": []

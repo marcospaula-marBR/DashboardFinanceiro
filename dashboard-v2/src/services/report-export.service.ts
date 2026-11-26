@@ -243,7 +243,7 @@ export class ReportExportService {
     const loansTable = safeTestMode ? 'employee_loans_test' : 'employee_loans';
 
     const [empsRes, loansRes] = await Promise.all([
-      supabase.from(empsTable).select('id, full_name, company'),
+      supabase.from(empsTable).select('id, full_name, company').neq('full_name', '__SYSTEM_GLOBAL_CONFIG__'),
       supabase.from(loansTable).select('*')
     ]);
 

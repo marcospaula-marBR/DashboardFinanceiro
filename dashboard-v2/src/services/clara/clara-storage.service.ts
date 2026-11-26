@@ -29,15 +29,16 @@ export class ClaraStorageService {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select('id, metadata')
+        .select('id, clara_integration:metadata->clara_integration')
         .eq('full_name', GLOBAL_CONFIG_NAME)
         .maybeSingle();
 
-      if (error || !data?.metadata?.clara_integration) {
+      const remoteClara = (data as any)?.clara_integration;
+      if (error || !remoteClara) {
         return null;
       }
 
-      return data.metadata.clara_integration as ClaraStoreState;
+      return remoteClara as ClaraStoreState;
     } catch (e: any) {
       console.warn('[ClaraStorageService] Aviso ao ler metadata do Supabase:', e.message);
       return null;

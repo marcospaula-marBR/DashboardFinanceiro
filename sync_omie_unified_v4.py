@@ -185,6 +185,72 @@ EXCLUSION_KEYWORDS = [
     'classificar'     # a classificar
 ]
 
+COMPACT_RAW_TOP_KEYS = (
+    "codigo_lancamento_omie", "status_titulo", "id_conta_corrente", "nCodCC", "cContaCorrente",
+    "id_origem", "observacao", "codigo_cliente_fornecedor", "cnpj_cpf", "cCPFCNPJCliente",
+    "nm_cliente", "nome_cliente", "codigo_projeto", "nCodProjeto", "cCodProjeto",
+    "numero_parcela", "valor_documento", "valor_ir", "valor_iss", "valor_pis",
+    "valor_cofins", "valor_csll", "valor_inss", "data_vencimento", "data_emissao",
+    "cNumeroContrato", "numero_pedido", "chave_nfe",
+)
+
+COMPACT_RAW_DET_KEYS = (
+    "nCodTitulo", "cCodCateg", "cDesCateg", "cOrigem", "cGrupo", "cNatureza", "observacao",
+    "cObservacao", "cDesMov", "nCodCC", "cContaCorrente", "nCodMovCC", "cNumDocFiscal",
+    "nCodCliente", "cCPFCNPJCliente", "cNomeCliente", "cNomPessoa", "cCodProjeto", "nCodProjeto",
+    "cNumParcela", "cNumParc", "numero_parcela", "nValorIR", "nValorISS", "nValorPIS",
+    "nValorCOFINS", "nValorCSLL", "nValorINSS", "nValorTitulo", "dDtVenc", "dDtEmissao",
+    "cNumCtr", "cNumOS", "cChaveNFe", "cUsInc", "dDtInc",
+)
+
+
+def compact_raw_data(raw):
+    """Preserva apenas os campos de raw_data lidos pelo DRE-Caixa, DRE-Painel e Conciliacao PJ."""
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for k in COMPACT_RAW_TOP_KEYS:
+        v = raw.get(k)
+        if v not in (None, "", 0, 0.0, False):
+            out[k] = v
+
+    dist = raw.get("distribuicao")
+    if isinstance(dist, list) and len(dist) > 1:
+        compact_dist = []
+        for d in dist:
+            if isinstance(d, dict):
+                item = {k: d[k] for k in ("cDesDep", "nValDep", "nPerDep") if d.get(k) not in (None, "")}
+                if item:
+                    compact_dist.append(item)
+        if compact_dist:
+            out["distribuicao"] = compact_dist
+
+    info = raw.get("info")
+    if isinstance(info, dict):
+        compact_info = {k: info[k] for k in ("uInc", "dInc") if info.get(k) not in (None, "")}
+        if compact_info:
+            out["info"] = compact_info
+
+    cab = raw.get("cabecalho")
+    if isinstance(cab, dict):
+        compact_cab = {k: cab[k] for k in ("cNumParcela", "numero_parcela") if cab.get(k) not in (None, "")}
+        if compact_cab:
+            out["cabecalho"] = compact_cab
+
+    res = raw.get("resumo")
+    if isinstance(res, dict):
+        compact_res = {k: res[k] for k in ("nValPago", "nValLiquido") if res.get(k) not in (None, 0, 0.0)}
+        if compact_res:
+            out["resumo"] = compact_res
+
+    det = raw.get("detalhes")
+    if isinstance(det, dict):
+        compact_det = {k: det[k] for k in COMPACT_RAW_DET_KEYS if det.get(k) not in (None, "", 0, 0.0)}
+        if compact_det:
+            out["detalhes"] = compact_det
+
+    return out
+
 
 def is_excluded_caixa(c_categ, cat_nome, obs=""):
     code = str(c_categ or "").strip()
@@ -562,7 +628,7 @@ class OmieSync:
                     "departamento_nome": d.get("cDesDep"),
                     "cliente_fornecedor": cliente_forn,
                     "numero_documento": r.get("numero_documento") or r.get("numero_documento_fiscal"),
-                    "raw_data": r
+                    "raw_data": compact_raw_data(r)
                 })
         return rows
 
@@ -662,7 +728,7 @@ class OmieSync:
                 "departamento_nome": "Principal",
                 "cliente_fornecedor": cliente_forn,
                 "numero_documento": det.get("cNumDocFiscal") or det.get("cNumTitulo"),
-                "raw_data": r
+                "raw_data": compact_raw_data(r)
             })
         return rows
 

@@ -1,12 +1,17 @@
-name: Supabase Daily Backup
-# Versao 1.0.4 - Armazenamento seguro de Backup em GitHub Artifacts (90 dias) e Google Drive opcional
+name: Supabase Weekly Backup
+# Versao 1.1.0 - Backup semanal enxuto (sem cache Omie recriável) em GitHub Artifacts (90 dias) e Google Drive opcional
 
 on:
   schedule:
-    # Roda todos os dias às 03:00 UTC (00:00 Horário de Brasília)
-    - cron: '0 3 * * *'
+    # Roda 1x por semana (Domingo 03:00 UTC / 00:00 Horário de Brasília) para economizar Egress no plano Free
+    - cron: '0 3 * * 0'
   workflow_dispatch:
-    # Permite rodar o backup manualmente pelo painel do GitHub Actions
+    inputs:
+      include_omie_cache:
+        description: 'Incluir tabelas cache da Omie (omie_financas_unificado e omie_dim_*)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   backup:
@@ -26,12 +31,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install google-api-python-client google-auth
 
-    - name: Run Supabase Full Backup
+    - name: Run Supabase Backup
       env:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       run: |
-        python .github/scripts/backup_supabase.py --output-dir . --workers 6
+        EXCLUDE_FLAG='--exclude-tables omie_financas_unificado,omie_dim_categorias,omie_dim_projetos,omie_dim_fornecedores'
+        if [ "${{ github.event.inputs.include_omie_cache }}" = "true" ]; then
+          EXCLUDE_FLAG=""
+        fi
+        python .github/scripts/backup_supabase.py --output-dir . --workers 6 $EXCLUDE_FLAG
 
     - name: Encrypt Backup File with GPG
       env:
