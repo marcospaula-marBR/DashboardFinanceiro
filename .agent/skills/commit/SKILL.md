@@ -29,8 +29,6 @@ Project-specific settings: `.agent/skills/commit/config/commit-config.yaml`
 <type>(<scope>): <description>
 
 [optional body]
-
-Co-Authored-By: First Fluke <our.first.fluke@gmail.com>
 ```
 
 ## Workflow
@@ -96,8 +94,6 @@ feat(orchestrator): add multi-CLI agent mapping support
 - Add user-preferences.yaml for CLI configuration
 - Update spawn-agent.sh to read agent-CLI mapping
 - Update memory schema with CLI field
-
-Co-Authored-By: First Fluke <our.first.fluke@gmail.com>
 
 Proceed with this commit? (Y/N/Edit)
 ```
